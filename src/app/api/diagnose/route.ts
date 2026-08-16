@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { diagnoseFailure, GeminiNotConfiguredError, GeminiOverloadedError } from "@/lib/gemini";
+import { fetchPrDiff, parsePrReference, GitHubNotConfiguredError, GitHubNotFoundError, GitHubRateLimitError, type PrDiff } from "@/lib/github";
 import type { DiagnoseRequest, DiagnosisResult, Framework } from "@/lib/types";
 
 const VALID_FRAMEWORKS: Framework[] = ["playwright-ts", "playwright-js", "selenium-java"];
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     return badRequest("Request body must be valid JSON.");
   }
 
-  const { testCode, ciLog, domSnippet, consoleLog, networkLog, environmentInfo, screenshotDataUrl, framework } = body;
+  const { testCode, ciLog, domSnippet, consoleLog, networkLog, environmentInfo, prReference, screenshotDataUrl, framework } = body;
 
   if (!testCode || typeof testCode !== "string" || !testCode.trim()) {
     return badRequest("testCode is required.");
@@ -39,6 +40,33 @@ export async function POST(req: Request) {
     }
   }
 
+  const prRef = typeof prReference === "string" && prReference.trim() ? parsePrReference(prReference) : null;
+  if (typeof prReference === "string" && prReference.trim() && !prRef) {
+    return badRequest("Couldn't parse that as a GitHub PR — use a full URL (https://github.com/owner/repo/pull/42) or owner/repo#42.");
+  }
+
+  let prDiff: PrDiff | undefined;
+  if (prRef) {
+    try {
+      prDiff = await fetchPrDiff(prRef);
+    } catch (err) {
+      if (err instanceof GitHubNotConfiguredError) {
+        return NextResponse.json(
+          { error: "GITHUB_TOKEN is not set. Add it to .env.local and restart the dev server, or remove the PR reference." },
+          { status: 500 }
+        );
+      }
+      if (err instanceof GitHubNotFoundError) {
+        return badRequest(err.message);
+      }
+      if (err instanceof GitHubRateLimitError) {
+        return NextResponse.json({ error: err.message }, { status: 429 });
+      }
+      console.error("GitHub PR fetch failed:", err);
+      return NextResponse.json({ error: "Couldn't fetch that PR from GitHub. Check the reference and try again." }, { status: 502 });
+    }
+  }
+
   try {
     const diagnosis = await diagnoseFailure(
       {
@@ -48,13 +76,18 @@ export async function POST(req: Request) {
         consoleLog: typeof consoleLog === "string" ? consoleLog : undefined,
         networkLog: typeof networkLog === "string" ? networkLog : undefined,
         environmentInfo: typeof environmentInfo === "string" ? environmentInfo : undefined,
+        prReference: typeof prReference === "string" ? prReference : undefined,
         framework: framework as Framework,
       },
-      typeof screenshotDataUrl === "string" ? screenshotDataUrl : undefined
+      typeof screenshotDataUrl === "string" ? screenshotDataUrl : undefined,
+      prDiff
     );
 
     const result: DiagnosisResult = { ...diagnosis, framework: framework as Framework };
-    return NextResponse.json(result satisfies DiagnosisResult);
+    return NextResponse.json({
+      result,
+      prInfo: prRef && prDiff ? { ...prRef, title: prDiff.title, filesChanged: prDiff.filesChanged, truncated: prDiff.truncated } : undefined,
+    });
   } catch (err) {
     if (err instanceof GeminiNotConfiguredError) {
       return NextResponse.json(

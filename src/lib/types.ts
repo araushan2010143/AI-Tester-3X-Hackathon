@@ -66,7 +66,18 @@ export interface DiagnoseRequest {
   consoleLog?: string;
   networkLog?: string;
   environmentInfo?: string;
+  prReference?: string;
   framework: Framework;
+}
+
+/** Metadata about the GitHub PR a diagnosis was correlated against, for the "Correlated with PR #N" caption. */
+export interface PrInfo {
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  filesChanged: number;
+  truncated: boolean;
 }
 
 export interface HistoryEntry {

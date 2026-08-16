@@ -6,6 +6,7 @@ import {
 } from "@google/generative-ai";
 import type { DiagnoseRequest, DiagnosisResult, FailureCluster, FlakyDiagnoseRequest, Framework, RunHistoryStats } from "./types";
 import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS, RUN_PATTERN_LABELS } from "./types";
+import type { PrDiff } from "./github";
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
@@ -68,7 +69,7 @@ const CATEGORY_GUIDANCE = `- locator_breakage: a selector no longer resolves, or
 - flaky_test: the failure looks like a non-deterministic, hard-to-reproduce issue rather than a consistent one — only pick this when the evidence itself suggests non-determinism, not as a default guess.
 - application_bug: everything about the test and environment looks correct, and the evidence points to the application itself behaving wrong.`;
 
-function buildDiagnosisPrompt(req: DiagnoseRequest, hasScreenshot: boolean): string {
+function buildDiagnosisPrompt(req: DiagnoseRequest, hasScreenshot: boolean, prDiff?: PrDiff): string {
   return `You are a senior QA automation engineer acting as a debugging assistant. A test written in ${FRAMEWORK_LABELS[req.framework]} failed in CI. Diagnose the *real* root cause and produce a robust fix.
 
 Rules:
@@ -81,13 +82,14 @@ ${CATEGORY_GUIDANCE}
 - "before" should be the specific broken snippet from the test code, not the whole file.
 ${hasScreenshot ? "- A screenshot of the page at the moment of failure is attached as an image. Actually look at it — a cookie/consent banner, a modal, a loading spinner, an error page, an unexpected redirect, or misaligned layout can explain a failure that the text alone doesn't. If it shows something relevant, cite it specifically as evidence (e.g. \"screenshot shows a cookie-consent overlay covering the button\"); if it doesn't add anything beyond the text evidence, don't force it in." : ""}
 ${req.environmentInfo ? "- Environment/version info is provided below. If it states both a local/expected value and a CI/actual value for the same thing (Node, browser, driver, framework version), compare them explicitly — a mismatch there (e.g. Chrome 140 vs ChromeDriver 139) is strong, specific evidence, and usually means dependency_issue or browser_issue is the sharper category than a generic one." : ""}
+${prDiff ? "- The diff of the pull request that triggered this CI run is provided below. This is the strongest evidence available — actively check whether it explains the failure (a renamed/removed selector, a changed API field or response shape, a deleted element) before falling back to inference from the log alone. Cite specific diff lines as evidence when they're the actual cause." : ""}
 
 --- FAILED TEST CODE (${FRAMEWORK_LABELS[req.framework]}) ---
 ${req.testCode}
 
 --- CI/CD ERROR LOG / STACK TRACE ---
 ${req.ciLog}
-${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : ""}${req.consoleLog ? `\n--- BROWSER CONSOLE LOG ---\n${req.consoleLog}\n` : ""}${req.networkLog ? `\n--- NETWORK LOG / FAILED REQUESTS ---\n${req.networkLog}\n` : ""}${req.environmentInfo ? `\n--- ENVIRONMENT / VERSION INFO ---\n${req.environmentInfo}\n` : ""}
+${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : ""}${req.consoleLog ? `\n--- BROWSER CONSOLE LOG ---\n${req.consoleLog}\n` : ""}${req.networkLog ? `\n--- NETWORK LOG / FAILED REQUESTS ---\n${req.networkLog}\n` : ""}${req.environmentInfo ? `\n--- ENVIRONMENT / VERSION INFO ---\n${req.environmentInfo}\n` : ""}${prDiff ? `\n--- PULL REQUEST DIFF: "${prDiff.title}" (${prDiff.filesChanged} files changed) ---\n${prDiff.diff}\n` : ""}
 Respond with only the JSON object matching the required schema.`;
 }
 
@@ -240,9 +242,10 @@ async function callGeminiJson(
 
 export async function diagnoseFailure(
   req: DiagnoseRequest,
-  screenshotDataUrl?: string
+  screenshotDataUrl?: string,
+  prDiff?: PrDiff
 ): Promise<Omit<DiagnosisResult, "framework">> {
-  return callGeminiJson(buildDiagnosisPrompt(req, Boolean(screenshotDataUrl)), screenshotDataUrl);
+  return callGeminiJson(buildDiagnosisPrompt(req, Boolean(screenshotDataUrl), prDiff), screenshotDataUrl);
 }
 
 export async function diagnoseCluster(

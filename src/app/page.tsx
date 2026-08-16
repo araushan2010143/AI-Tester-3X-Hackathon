@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, RotateCcw, Search, ListTree, Activity } from "lucide-react";
+import { Sparkles, RotateCcw, Search, ListTree, Activity, GitPullRequest } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +29,7 @@ import { findSimilarDiagnoses } from "@/lib/similar-diagnoses";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
 import { DEMO_FLAKY_RUN } from "@/lib/demo-flaky-run";
-import { FRAMEWORK_LABELS, type CiProvider, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
+import { FRAMEWORK_LABELS, type CiProvider, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type PrInfo, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
@@ -49,9 +49,11 @@ export default function Home() {
   const [consoleLog, setConsoleLog] = useState("");
   const [networkLog, setNetworkLog] = useState("");
   const [environmentInfo, setEnvironmentInfo] = useState("");
+  const [prReference, setPrReference] = useState("");
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [similarDiagnoses, setSimilarDiagnoses] = useState<SimilarDiagnosis[]>([]);
+  const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
   const canDiagnose = testCode.trim().length > 0 && ciLog.trim().length > 0 && !loading;
@@ -72,6 +74,7 @@ export default function Home() {
       consoleLog: consoleLog.trim() || undefined,
       networkLog: networkLog.trim() || undefined,
       environmentInfo: environmentInfo.trim() || undefined,
+      prReference: prReference.trim() || undefined,
       framework,
     };
 
@@ -88,11 +91,13 @@ export default function Home() {
         return;
       }
 
+      const diagnosis = data.result as DiagnosisResult;
       // Snapshot history *before* saving the new entry, so the just-added one doesn't trivially match itself.
       const priorHistory = getHistory();
-      setResult(data as DiagnosisResult);
-      addHistoryEntry(request, data as DiagnosisResult);
-      setSimilarDiagnoses(findSimilarDiagnoses(data as DiagnosisResult, priorHistory));
+      setResult(diagnosis);
+      setPrInfo((data.prInfo as PrInfo | undefined) ?? null);
+      addHistoryEntry(request, diagnosis);
+      setSimilarDiagnoses(findSimilarDiagnoses(diagnosis, priorHistory));
     } catch {
       toast.error("Couldn't reach the diagnose API. Check your connection and try again.");
     } finally {
@@ -108,9 +113,11 @@ export default function Home() {
     setConsoleLog("");
     setNetworkLog("");
     setEnvironmentInfo("");
+    setPrReference("");
     setScreenshotDataUrl(null);
     setResult(demo.result);
     setSimilarDiagnoses([]);
+    setPrInfo(null);
     toast.success("Demo example loaded — no API key needed to view this result.");
   }
 
@@ -126,9 +133,11 @@ export default function Home() {
       setConsoleLog("");
       setNetworkLog("");
       setEnvironmentInfo("");
+      setPrReference("");
       setScreenshotDataUrl(null);
       setResult(null);
       setSimilarDiagnoses([]);
+      setPrInfo(null);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
     }
   }
@@ -142,9 +151,11 @@ export default function Home() {
     setConsoleLog(entry.request.consoleLog ?? "");
     setNetworkLog(entry.request.networkLog ?? "");
     setEnvironmentInfo(entry.request.environmentInfo ?? "");
+    setPrReference(entry.request.prReference ?? "");
     setScreenshotDataUrl(null);
     setResult(entry.result);
     setSimilarDiagnoses([]);
+    setPrInfo(null);
   }
 
   function handleAnalyzeAgain() {
@@ -155,8 +166,10 @@ export default function Home() {
     setConsoleLog("");
     setNetworkLog("");
     setEnvironmentInfo("");
+    setPrReference("");
     setScreenshotDataUrl(null);
     setSimilarDiagnoses([]);
+    setPrInfo(null);
   }
 
   // --- Bulk mode ---
@@ -503,6 +516,20 @@ export default function Home() {
                     </div>
 
                     <div className="space-y-2">
+                      <label className="text-sm font-semibold">GitHub PR</label>
+                      <p className="text-xs text-muted-foreground">
+                        The diff of the PR that triggered this run — the strongest evidence available when you have
+                        it. Requires <code className="rounded bg-muted px-1 py-0.5 font-mono">GITHUB_TOKEN</code> to
+                        be configured on the server.
+                      </p>
+                      <Input
+                        value={prReference}
+                        onChange={(e) => setPrReference(e.target.value)}
+                        placeholder="https://github.com/owner/repo/pull/42 or owner/repo#42"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
                       <label className="text-sm font-semibold">Screenshot at Failure</label>
                       <p className="text-xs text-muted-foreground">
                         Sent to Gemini as an image — a cookie banner, modal, or error page it wouldn&apos;t
@@ -537,6 +564,17 @@ export default function Home() {
 
             {!loading && result && (
               <>
+                {prInfo && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                    Correlated with{" "}
+                    <span className="font-medium text-foreground">
+                      {prInfo.owner}/{prInfo.repo}#{prInfo.number}
+                    </span>
+                    : &quot;{prInfo.title}&quot; ({prInfo.filesChanged} files changed
+                    {prInfo.truncated ? ", diff truncated" : ""})
+                  </p>
+                )}
                 <SimilarDiagnoses items={similarDiagnoses} />
                 <DiagnosisPanel result={result} />
                 <div className="flex justify-center">
