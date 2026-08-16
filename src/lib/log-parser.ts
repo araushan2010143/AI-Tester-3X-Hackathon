@@ -99,7 +99,8 @@ function parseGeneric(log: string): ParsedFailure[] {
 }
 
 export function parseFailures(log: string, framework: Framework): ParsedFailure[] {
-  const primary = framework === "playwright-ts" ? parsePlaywright(log) : parseSelenium(log);
+  // Playwright's list-reporter output is identical whether the test file is TS or JS.
+  const primary = framework === "selenium-java" ? parseSelenium(log) : parsePlaywright(log);
   if (primary.length > 0) return primary;
   return parseGeneric(log);
 }

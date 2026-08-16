@@ -1,7 +1,8 @@
-export type Framework = "playwright-ts" | "selenium-java";
+export type Framework = "playwright-ts" | "playwright-js" | "selenium-java";
 
 export const FRAMEWORK_LABELS: Record<Framework, string> = {
   "playwright-ts": "Playwright (TypeScript)",
+  "playwright-js": "Playwright (JavaScript)",
   "selenium-java": "Selenium (Java)",
 };
 
@@ -95,3 +96,39 @@ export type BulkStreamEvent =
   | { type: "skipped-cluster"; cluster: FailureCluster }
   | { type: "done"; clustersOk: number; clustersFailed: number; clustersSkipped: number }
   | { type: "error"; message: string };
+
+// --- Flaky-test mode (real run history -> computed stats + grounded diagnosis) ---
+
+export type RunStatus = "pass" | "fail";
+
+export interface RunOutcome {
+  run: string;
+  status: RunStatus;
+}
+
+export type RunPattern = "alternating" | "clustered_recent" | "clustered_early" | "scattered" | "always_failing";
+
+export const RUN_PATTERN_LABELS: Record<RunPattern, string> = {
+  alternating: "Alternating pass/fail",
+  clustered_recent: "Clustered in recent runs",
+  clustered_early: "Clustered in earlier runs",
+  scattered: "Scattered, no clear pattern",
+  always_failing: "Always failing",
+};
+
+export interface RunHistoryStats {
+  totalRuns: number;
+  failedRuns: number;
+  failureRate: number; // 0-100
+  longestFailStreak: number;
+  pattern: RunPattern;
+  outcomes: RunOutcome[];
+}
+
+export interface FlakyDiagnoseRequest {
+  runHistoryText: string;
+  testName?: string;
+  testCode?: string;
+  failureLog?: string;
+  framework: Framework;
+}

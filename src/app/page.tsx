@@ -13,15 +13,18 @@ import { FrameworkSelector } from "@/components/framework-selector";
 import { DiagnosisPanel } from "@/components/diagnosis-panel";
 import { EmptyState } from "@/components/empty-state";
 import { HistoryPanel } from "@/components/history-panel";
+import { BulkHistoryPanel } from "@/components/bulk-history-panel";
 import { BulkResults } from "@/components/bulk-results";
 import { addHistoryEntry } from "@/lib/history";
+import { addBulkHistoryEntry } from "@/lib/bulk-history";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
 import { FRAMEWORK_LABELS, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent } from "@/lib/types";
-import type { ClusterRowState } from "@/lib/bulk-types";
+import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
   "playwright-ts": "typescript",
+  "playwright-js": "javascript",
   "selenium-java": "java",
 };
 
@@ -126,6 +129,16 @@ export default function Home() {
 
   const canAnalyzeLog = bulkLog.trim().length > 0 && !bulkStreaming;
 
+  function handleSelectBulkHistory(entry: BulkHistoryEntry) {
+    setMode("bulk");
+    setBulkFramework(entry.framework);
+    setBulkTotalFailures(entry.totalFailures);
+    setBulkTotalClusters(entry.totalClusters);
+    setBulkRows(entry.rows);
+    setBulkStarted(true);
+    setBulkStreaming(false);
+  }
+
   function handleLoadBulkDemo() {
     setBulkFramework("playwright-ts");
     setBulkLog(DEMO_BULK_LOG);
@@ -143,6 +156,12 @@ export default function Home() {
     setBulkRows([]);
     setBulkTotalFailures(0);
     setBulkTotalClusters(0);
+
+    // Mirrors the React state locally so the final `done` event can save a complete
+    // history entry without racing the async setState batching.
+    let collectedRows: ClusterRowState[] = [];
+    let collectedTotalFailures = 0;
+    let collectedTotalClusters = 0;
 
     try {
       const res = await fetch("/api/diagnose-bulk", {
@@ -174,18 +193,29 @@ export default function Home() {
           const event = JSON.parse(line) as BulkStreamEvent;
 
           if (event.type === "start") {
+            collectedTotalFailures = event.totalFailures;
+            collectedTotalClusters = event.totalClusters;
             setBulkTotalFailures(event.totalFailures);
             setBulkTotalClusters(event.totalClusters);
             if (event.totalFailures === 0) {
               toast.error("No failures matched this framework's log format. Check the log or try the other framework.");
             }
           } else if (event.type === "cluster") {
-            setBulkRows((prev) => [...prev, { cluster: event.cluster, status: "ok", diagnosis: event.diagnosis }]);
+            const row: ClusterRowState = { cluster: event.cluster, status: "ok", diagnosis: event.diagnosis };
+            collectedRows = [...collectedRows, row];
+            setBulkRows((prev) => [...prev, row]);
           } else if (event.type === "cluster-error") {
-            setBulkRows((prev) => [...prev, { cluster: event.cluster, status: "error", error: event.error }]);
+            const row: ClusterRowState = { cluster: event.cluster, status: "error", error: event.error };
+            collectedRows = [...collectedRows, row];
+            setBulkRows((prev) => [...prev, row]);
           } else if (event.type === "skipped-cluster") {
-            setBulkRows((prev) => [...prev, { cluster: event.cluster, status: "skipped" }]);
+            const row: ClusterRowState = { cluster: event.cluster, status: "skipped" };
+            collectedRows = [...collectedRows, row];
+            setBulkRows((prev) => [...prev, row]);
           } else if (event.type === "done") {
+            if (collectedTotalFailures > 0) {
+              addBulkHistoryEntry(bulkFramework, collectedTotalFailures, collectedTotalClusters, collectedRows);
+            }
             toast.success(
               `Done — ${event.clustersOk} root cause${event.clustersOk === 1 ? "" : "s"} diagnosed${
                 event.clustersFailed ? `, ${event.clustersFailed} failed` : ""
@@ -219,17 +249,22 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-2">
           {mode === "single" ? (
-            <Button variant="outline" size="sm" onClick={handleLoadDemo}>
-              <Sparkles className="h-4 w-4" />
-              Load Demo
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={handleLoadDemo}>
+                <Sparkles className="h-4 w-4" />
+                Load Demo
+              </Button>
+              <HistoryPanel onSelect={handleSelectHistory} />
+            </>
           ) : (
-            <Button variant="outline" size="sm" onClick={handleLoadBulkDemo}>
-              <Sparkles className="h-4 w-4" />
-              Load Demo Log
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={handleLoadBulkDemo}>
+                <Sparkles className="h-4 w-4" />
+                Load Demo Log
+              </Button>
+              <BulkHistoryPanel onSelect={handleSelectBulkHistory} />
+            </>
           )}
-          <HistoryPanel onSelect={handleSelectHistory} />
         </div>
       </header>
 

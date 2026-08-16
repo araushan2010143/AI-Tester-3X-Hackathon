@@ -107,7 +107,64 @@ debugButton.click();`,
   },
 };
 
+/** Playwright/JavaScript example — a fixed sleep racing a slower-than-assumed UI recalculation. */
+export const DEMO_REQUEST_JS: DiagnoseRequest = {
+  framework: "playwright-js",
+  testCode: `test("submits the checkout form", async ({ page }) => {
+  await page.goto("/checkout");
+  await page.getByLabel("Promo code").fill("SAVE10");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Place Order" }).click();
+  await expect(page.getByText("Order placed")).toBeVisible();
+});`,
+  ciLog: `1) tests/checkout/apply-promo.spec.js:9:5 › submits the checkout form ===============================
+
+  Error: expect(locator).toBeVisible() failed
+
+  Locator:  getByText('Order placed')
+  Expected: visible
+  Received: <element(s) not found>
+  Timeout:  5000ms
+
+  Call log:
+    - expect.toBeVisible with timeout 5000ms
+    - waiting for getByText('Order placed')
+
+  Console:
+    - "Applying promo code..." (console.log)
+    - "Promo applied: SAVE10 (-10%)" (console.log, +860ms after click)
+    - "Place Order clicked" (console.log)
+    - "Error: total not yet recalculated" (console.error)
+
+      at tests/checkout/apply-promo.spec.js:9:5`,
+};
+
+export const DEMO_RESULT_JS: DiagnosisResult = {
+  framework: "playwright-js",
+  failureType: "timing_race_condition",
+  confidence: 88,
+  risk: "low",
+  rootCause:
+    "The test sleeps a fixed 500ms after clicking Apply, but the console log shows the promo recalculation ('Promo applied: SAVE10 (-10%)') doesn't actually finish until 860ms after the click. Place Order fires while the total is still recalculating, and the app silently blocks the order ('total not yet recalculated' is only a console.error, never surfaced to the UI) — so the order confirmation never renders and the assertion times out.",
+  evidence: [
+    "await page.waitForTimeout(500) is a fixed sleep, not a condition wait",
+    "Console log shows 'Promo applied: SAVE10 (-10%)' at +860ms — after the 500ms wait already elapsed",
+    "Console shows 'Error: total not yet recalculated' immediately after Place Order is clicked",
+    "expect(getByText('Order placed')).toBeVisible() timed out at 5000ms — the order was blocked, not just slow to render",
+  ],
+  fix: {
+    before: `await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Place Order" }).click();`,
+    after: `await expect(page.getByText("-10%")).toBeVisible();
+  await page.getByRole("button", { name: "Place Order" }).click();`,
+    explanation:
+      "Waiting for the actual discount text to render — a real UI state — instead of a fixed timeout guarantees the promo recalculation has finished before placing the order, regardless of how long that recalculation takes on any given run.",
+  },
+};
+
 export const DEMOS: Record<Framework, { request: DiagnoseRequest; result: DiagnosisResult }> = {
   "playwright-ts": { request: DEMO_REQUEST, result: DEMO_RESULT },
+  "playwright-js": { request: DEMO_REQUEST_JS, result: DEMO_RESULT_JS },
   "selenium-java": { request: DEMO_REQUEST_SELENIUM, result: DEMO_RESULT_SELENIUM },
 };

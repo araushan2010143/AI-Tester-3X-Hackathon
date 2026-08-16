@@ -23,12 +23,14 @@ function RowHeader({
   icon,
   iconClassName,
   title,
+  eyebrow,
   trailing,
 }: {
   cluster: FailureCluster;
   icon: ReactNode;
   iconClassName: string;
   title: string;
+  eyebrow?: string;
   trailing?: ReactNode;
 }) {
   return (
@@ -37,6 +39,9 @@ function RowHeader({
         {icon}
       </span>
       <div className="min-w-0 flex-1">
+        {eyebrow && (
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">{eyebrow}</p>
+        )}
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{title}</p>
           <Badge variant="secondary" className="shrink-0 text-xs">
@@ -50,7 +55,15 @@ function RowHeader({
   );
 }
 
-export function ClusterRow({ state, value }: { state: ClusterRowState; value: string }) {
+export function ClusterRow({
+  state,
+  value,
+  isPrimary,
+}: {
+  state: ClusterRowState;
+  value: string;
+  isPrimary?: boolean;
+}) {
   if (state.status === "ok") {
     const diagnosis: DiagnosisResult = state.diagnosis;
     const meta = FAILURE_TYPE_META[diagnosis.failureType];
@@ -64,6 +77,7 @@ export function ClusterRow({ state, value }: { state: ClusterRowState; value: st
             icon={<Icon className="h-4 w-4" />}
             iconClassName={meta.className}
             title={FAILURE_TYPE_LABELS[diagnosis.failureType]}
+            eyebrow={isPrimary ? "Primary root cause" : undefined}
             trailing={
               <Badge className={`mr-2 shrink-0 text-xs ${confidenceClassName(diagnosis.confidence)}`} variant="secondary">
                 {diagnosis.confidence}%

@@ -43,6 +43,12 @@ function FailureTypeBreakdown({ rows }: { rows: ClusterRowState[] }) {
 }
 
 export function BulkResults({ totalFailures, totalClusters, rows, streaming }: BulkResultsProps) {
+  // Rows arrive in stream-completion order, not size order — sort a display copy so the
+  // biggest (most impactful) root cause always surfaces first, and can be called out as primary.
+  const sortedRows = [...rows].sort((a, b) => b.cluster.memberCount - a.cluster.memberCount);
+  const primary = sortedRows.find((r) => r.status === "ok");
+  const primaryShare = primary && totalFailures > 0 ? Math.round((primary.cluster.memberCount / totalFailures) * 100) : 0;
+
   return (
     <Card>
       <CardHeader className="space-y-3">
@@ -53,6 +59,11 @@ export function BulkResults({ totalFailures, totalClusters, rows, streaming }: B
               {totalFailures} {totalFailures === 1 ? "failure" : "failures"} → {totalClusters}{" "}
               {totalClusters === 1 ? "root cause" : "root causes"}
             </h2>
+            {primary && (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Primary cause accounts for {primary.cluster.memberCount} of {totalFailures} failures ({primaryShare}%)
+              </p>
+            )}
           </div>
           {streaming && (
             <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -65,8 +76,13 @@ export function BulkResults({ totalFailures, totalClusters, rows, streaming }: B
       </CardHeader>
       <CardContent>
         <Accordion className="gap-0">
-          {rows.map((row, i) => (
-            <ClusterRow key={row.cluster.fingerprint} state={row} value={`cluster-${i}`} />
+          {sortedRows.map((row, i) => (
+            <ClusterRow
+              key={row.cluster.fingerprint}
+              state={row}
+              value={`cluster-${i}`}
+              isPrimary={row === primary}
+            />
           ))}
         </Accordion>
       </CardContent>
