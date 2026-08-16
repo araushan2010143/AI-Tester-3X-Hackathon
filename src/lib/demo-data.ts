@@ -28,7 +28,7 @@ export const DEMO_REQUEST: DiagnoseRequest = {
       at dashboard.spec.ts:12:38`,
   domSnippet: `<header class="dashboard-header">
   <div class="header-overlay absolute inset-0 z-20"></div>
-  <button class="btn-debug relative z-10" aria-label="Opens Debug Info">
+  <button class="btn-debug-panel relative z-10" aria-label="Opens Debug Info">
     <svg class="icon" aria-hidden="true">...</svg>
   </button>
 </header>`,
