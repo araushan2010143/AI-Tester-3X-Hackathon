@@ -1,18 +1,42 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { RunTimeline } from "@/components/run-timeline";
+import { FlakinessSignals } from "@/components/flakiness-signals";
 import { RUN_PATTERN_LABELS, type RunHistoryStats } from "@/lib/types";
 
 function rateClassName(rate: number): string {
-  if (rate >= 50) return "text-red-500 bg-red-500/10";
-  if (rate >= 15) return "text-amber-500 bg-amber-500/10";
-  return "text-emerald-500 bg-emerald-500/10";
+  if (rate >= 50) return "text-red-500";
+  if (rate >= 15) return "text-amber-500";
+  return "text-emerald-500";
+}
+
+function StatCell({
+  label,
+  value,
+  valueClassName,
+  small,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+  small?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`font-bold tabular-nums ${small ? "text-sm leading-snug" : "text-xl"} ${valueClassName ?? ""}`}>
+        {value}
+      </p>
+    </div>
+  );
 }
 
 export function FlakyStatsPanel({ stats }: { stats: RunHistoryStats }) {
+  const passRate = 100 - stats.failureRate;
+
   return (
     <Card>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {stats.source === "retry-log"
@@ -23,18 +47,19 @@ export function FlakyStatsPanel({ stats }: { stats: RunHistoryStats }) {
             {stats.failedRuns} of {stats.totalRuns} {stats.source === "retry-log" ? "attempts" : "runs"} failed
           </h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge className={`text-sm font-medium ${rateClassName(stats.failureRate)}`} variant="secondary">
-            {stats.failureRate}% failure rate
-          </Badge>
-          <Badge variant="secondary" className="text-sm font-medium">
-            Longest fail streak: {stats.longestFailStreak}
-          </Badge>
-          <Badge variant="outline" className="text-sm font-medium">
-            {RUN_PATTERN_LABELS[stats.pattern]}
-          </Badge>
+
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCell label="Failure Rate" value={`${stats.failureRate}%`} valueClassName={rateClassName(stats.failureRate)} />
+          <StatCell label="Pass Rate" value={`${passRate}%`} valueClassName="text-emerald-500" />
+          <StatCell label="Longest Streak" value={String(stats.longestFailStreak)} />
+          <StatCell label="Pattern" value={RUN_PATTERN_LABELS[stats.pattern]} small />
         </div>
+
         <RunTimeline outcomes={stats.outcomes} />
+
+        <Separator />
+
+        <FlakinessSignals stats={stats} />
       </CardContent>
     </Card>
   );
