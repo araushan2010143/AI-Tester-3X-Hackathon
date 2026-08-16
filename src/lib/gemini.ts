@@ -68,7 +68,7 @@ const CATEGORY_GUIDANCE = `- locator_breakage: a selector no longer resolves, or
 - flaky_test: the failure looks like a non-deterministic, hard-to-reproduce issue rather than a consistent one — only pick this when the evidence itself suggests non-determinism, not as a default guess.
 - application_bug: everything about the test and environment looks correct, and the evidence points to the application itself behaving wrong.`;
 
-function buildDiagnosisPrompt(req: DiagnoseRequest): string {
+function buildDiagnosisPrompt(req: DiagnoseRequest, hasScreenshot: boolean): string {
   return `You are a senior QA automation engineer acting as a debugging assistant. A test written in ${FRAMEWORK_LABELS[req.framework]} failed in CI. Diagnose the *real* root cause and produce a robust fix.
 
 Rules:
@@ -79,13 +79,14 @@ ${CATEGORY_GUIDANCE}
 - risk reflects how safe it is to apply the fix and move on: low for a clean, mechanical fix (e.g. a locator swap); high whenever the evidence could instead mean a real application bug or something needing a human to dig further — do not default to low.
 - The fix must be idiomatic, resilient, production-ready code in the same framework/language as the test (prefer accessible/semantic locators over brittle CSS/XPath for UI frameworks, proper explicit waits over sleeps, etc.).
 - "before" should be the specific broken snippet from the test code, not the whole file.
+${hasScreenshot ? "- A screenshot of the page at the moment of failure is attached as an image. Actually look at it — a cookie/consent banner, a modal, a loading spinner, an error page, an unexpected redirect, or misaligned layout can explain a failure that the text alone doesn't. If it shows something relevant, cite it specifically as evidence (e.g. \"screenshot shows a cookie-consent overlay covering the button\"); if it doesn't add anything beyond the text evidence, don't force it in." : ""}
 
 --- FAILED TEST CODE (${FRAMEWORK_LABELS[req.framework]}) ---
 ${req.testCode}
 
 --- CI/CD ERROR LOG / STACK TRACE ---
 ${req.ciLog}
-${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : ""}
+${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : ""}${req.consoleLog ? `\n--- BROWSER CONSOLE LOG ---\n${req.consoleLog}\n` : ""}${req.networkLog ? `\n--- NETWORK LOG / FAILED REQUESTS ---\n${req.networkLog}\n` : ""}
 Respond with only the JSON object matching the required schema.`;
 }
 
@@ -189,14 +190,24 @@ function getModel() {
   });
 }
 
+const IMAGE_DATA_URL_RE = /^data:(image\/(?:png|jpe?g|webp));base64,([\s\S]+)$/;
+
 /** Calls Gemini with retry/backoff on transient overload, parses the JSON response, clamps confidence. */
-async function callGeminiJson(prompt: string): Promise<Omit<DiagnosisResult, "framework">> {
+async function callGeminiJson(
+  prompt: string,
+  imageDataUrl?: string
+): Promise<Omit<DiagnosisResult, "framework">> {
   const model = getModel();
+
+  const match = imageDataUrl?.match(IMAGE_DATA_URL_RE);
+  const request = match
+    ? [prompt, { inlineData: { mimeType: match[1], data: match[2] } }]
+    : prompt;
 
   let text: string | undefined;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent(request);
       text = result.response.text();
       break;
     } catch (err) {
@@ -227,9 +238,10 @@ async function callGeminiJson(prompt: string): Promise<Omit<DiagnosisResult, "fr
 }
 
 export async function diagnoseFailure(
-  req: DiagnoseRequest
+  req: DiagnoseRequest,
+  screenshotDataUrl?: string
 ): Promise<Omit<DiagnosisResult, "framework">> {
-  return callGeminiJson(buildDiagnosisPrompt(req));
+  return callGeminiJson(buildDiagnosisPrompt(req, Boolean(screenshotDataUrl)), screenshotDataUrl);
 }
 
 export async function diagnoseCluster(

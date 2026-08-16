@@ -9,8 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { CodeEditor } from "@/components/code-editor";
 import { FrameworkSelector } from "@/components/framework-selector";
+import { ScreenshotUpload } from "@/components/screenshot-upload";
 import { DiagnosisPanel } from "@/components/diagnosis-panel";
 import { EmptyState } from "@/components/empty-state";
 import { HistoryPanel } from "@/components/history-panel";
@@ -39,6 +41,9 @@ export default function Home() {
   const [testCode, setTestCode] = useState("");
   const [ciLog, setCiLog] = useState("");
   const [domSnippet, setDomSnippet] = useState("");
+  const [consoleLog, setConsoleLog] = useState("");
+  const [networkLog, setNetworkLog] = useState("");
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -57,6 +62,8 @@ export default function Home() {
       testCode,
       ciLog,
       domSnippet: domSnippet.trim() || undefined,
+      consoleLog: consoleLog.trim() || undefined,
+      networkLog: networkLog.trim() || undefined,
       framework,
     };
 
@@ -64,7 +71,7 @@ export default function Home() {
       const res = await fetch("/api/diagnose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
+        body: JSON.stringify({ ...request, screenshotDataUrl: screenshotDataUrl ?? undefined }),
       });
       const data = await res.json();
 
@@ -87,6 +94,9 @@ export default function Home() {
     setTestCode(demo.request.testCode);
     setCiLog(demo.request.ciLog);
     setDomSnippet(demo.request.domSnippet ?? "");
+    setConsoleLog("");
+    setNetworkLog("");
+    setScreenshotDataUrl(null);
     setResult(demo.result);
     toast.success("Demo example loaded — no API key needed to view this result.");
   }
@@ -100,6 +110,9 @@ export default function Home() {
       setTestCode("");
       setCiLog("");
       setDomSnippet("");
+      setConsoleLog("");
+      setNetworkLog("");
+      setScreenshotDataUrl(null);
       setResult(null);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
     }
@@ -111,6 +124,9 @@ export default function Home() {
     setTestCode(entry.request.testCode);
     setCiLog(entry.request.ciLog);
     setDomSnippet(entry.request.domSnippet ?? "");
+    setConsoleLog(entry.request.consoleLog ?? "");
+    setNetworkLog(entry.request.networkLog ?? "");
+    setScreenshotDataUrl(null);
     setResult(entry.result);
   }
 
@@ -119,6 +135,9 @@ export default function Home() {
     setTestCode("");
     setCiLog("");
     setDomSnippet("");
+    setConsoleLog("");
+    setNetworkLog("");
+    setScreenshotDataUrl(null);
   }
 
   // --- Bulk mode ---
@@ -385,17 +404,54 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-semibold">
-                  DOM / HTML Snippet <span className="font-normal text-muted-foreground">(optional, improves accuracy)</span>
-                </label>
-                <Textarea
-                  value={domSnippet}
-                  onChange={(e) => setDomSnippet(e.target.value)}
-                  placeholder="Paste the relevant DOM/HTML around the failing element, if you have it…"
-                  className="min-h-20 font-mono text-xs"
-                />
-              </div>
+              <Accordion>
+                <AccordionItem value="evidence">
+                  <AccordionTrigger>
+                    Additional Evidence <span className="ml-1.5 font-normal text-muted-foreground">(optional, improves accuracy)</span>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-4 pt-1">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">DOM / HTML Snippet</label>
+                      <Textarea
+                        value={domSnippet}
+                        onChange={(e) => setDomSnippet(e.target.value)}
+                        placeholder="Paste the relevant DOM/HTML around the failing element, if you have it…"
+                        className="min-h-20 font-mono text-xs"
+                      />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold">Browser Console Log</label>
+                        <Textarea
+                          value={consoleLog}
+                          onChange={(e) => setConsoleLog(e.target.value)}
+                          placeholder="console.error / pageerror output, if you captured it…"
+                          className="min-h-20 font-mono text-xs"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold">Network Log / Failed Requests</label>
+                        <Textarea
+                          value={networkLog}
+                          onChange={(e) => setNetworkLog(e.target.value)}
+                          placeholder="Failed request URLs, status codes, response bodies…"
+                          className="min-h-20 font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">Screenshot at Failure</label>
+                      <p className="text-xs text-muted-foreground">
+                        Sent to Gemini as an image — a cookie banner, modal, or error page it wouldn&apos;t
+                        otherwise know about can change the diagnosis.
+                      </p>
+                      <ScreenshotUpload value={screenshotDataUrl} onChange={setScreenshotDataUrl} />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </CardContent>
           </Card>
 

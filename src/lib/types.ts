@@ -63,6 +63,8 @@ export interface DiagnoseRequest {
   testCode: string;
   ciLog: string;
   domSnippet?: string;
+  consoleLog?: string;
+  networkLog?: string;
   framework: Framework;
 }
 
