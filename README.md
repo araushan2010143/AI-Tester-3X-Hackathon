@@ -22,7 +22,7 @@ TraceFix AI provides a fast web dashboard where testers paste their broken test 
 * **Framework:** Next.js 16 (App Router, React 19, TypeScript)
 * **Styling/UI:** Tailwind CSS v4 + shadcn/ui, dark-mode-first
 * **Code editing:** Monaco Editor (`@monaco-editor/react`)
-* **AI Integration:** Google Gemini API (`gemini-2.5-flash`), JSON-mode structured output
+* **AI Integration:** Google Gemini API (`gemini-flash-latest`), JSON-mode structured output
 * **History:** localStorage (no DB needed for the MVP)
 * **Deployment target:** Vercel
 

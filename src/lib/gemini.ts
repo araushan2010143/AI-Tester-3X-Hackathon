@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-
 import type { DiagnoseRequest, DiagnosisResult } from "./types";
 import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS } from "./types";
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
 const FAILURE_TYPE_VALUES = Object.keys(FAILURE_TYPE_LABELS);
 
