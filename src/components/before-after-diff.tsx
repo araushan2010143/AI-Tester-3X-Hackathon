@@ -26,10 +26,10 @@ function CodeBlock({
 
   return (
     <div className={`overflow-hidden rounded-lg border ${accent}`}>
-      <div className="border-b border-inherit px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="border-b border-inherit px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-relaxed whitespace-pre-wrap break-words">
+      <pre className="overflow-x-auto p-4 text-sm leading-relaxed whitespace-pre-wrap break-words">
         <code className="font-mono">{code}</code>
       </pre>
     </div>

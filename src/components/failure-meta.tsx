@@ -13,7 +13,7 @@ import {
   Bug,
   type LucideIcon,
 } from "lucide-react";
-import type { FailureType, RiskLevel } from "@/lib/types";
+import type { FailureType, Framework, RiskLevel } from "@/lib/types";
 
 interface FailureMeta {
   icon: LucideIcon;
@@ -87,3 +87,10 @@ const RISK_CLASSNAMES: Record<RiskLevel, string> = {
 export function riskClassName(risk: RiskLevel): string {
   return RISK_CLASSNAMES[risk];
 }
+
+/** Two-chip framework badge, e.g. "PLAYWRIGHT" + "TYPESCRIPT", or "SELENIUM" + "JAVA". */
+export const FRAMEWORK_BADGE_PARTS: Record<Framework, [string, string]> = {
+  "playwright-ts": ["Playwright", "TypeScript"],
+  "playwright-js": ["Playwright", "JavaScript"],
+  "selenium-java": ["Selenium", "Java"],
+};

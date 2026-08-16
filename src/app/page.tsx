@@ -14,6 +14,7 @@ import { CodeEditor } from "@/components/code-editor";
 import { FrameworkSelector } from "@/components/framework-selector";
 import { ScreenshotUpload } from "@/components/screenshot-upload";
 import { DiagnosisPanel } from "@/components/diagnosis-panel";
+import type { DiagnosisSignals } from "@/components/signals-analyzed";
 import { EmptyState } from "@/components/empty-state";
 import { HistoryPanel } from "@/components/history-panel";
 import { BulkHistoryPanel } from "@/components/bulk-history-panel";
@@ -38,6 +39,25 @@ const MONACO_LANGUAGE: Record<Framework, string> = {
   "selenium-java": "java",
 };
 
+/** What the AI actually had in front of it — a direct reflection of the real request, never
+ *  derived from live form state (which could drift after the diagnosis already ran). */
+function computeSignals(
+  request: { domSnippet?: string; consoleLog?: string; networkLog?: string; environmentInfo?: string },
+  hasScreenshot: boolean,
+  hasPrDiff: boolean
+): DiagnosisSignals {
+  return {
+    testCode: true,
+    ciLog: true,
+    domSnippet: !!request.domSnippet,
+    consoleLog: !!request.consoleLog,
+    networkLog: !!request.networkLog,
+    environmentInfo: !!request.environmentInfo,
+    screenshot: hasScreenshot,
+    prDiff: hasPrDiff,
+  };
+}
+
 export default function Home() {
   const [mode, setMode] = useState<"single" | "bulk" | "flaky" | "dashboard">("single");
 
@@ -52,6 +72,7 @@ export default function Home() {
   const [prReference, setPrReference] = useState("");
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
+  const [resultSignals, setResultSignals] = useState<DiagnosisSignals | null>(null);
   const [similarDiagnoses, setSimilarDiagnoses] = useState<SimilarDiagnosis[]>([]);
   const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,10 +113,12 @@ export default function Home() {
       }
 
       const diagnosis = data.result as DiagnosisResult;
+      const resolvedPrInfo = (data.prInfo as PrInfo | undefined) ?? null;
       // Snapshot history *before* saving the new entry, so the just-added one doesn't trivially match itself.
       const priorHistory = getHistory();
       setResult(diagnosis);
-      setPrInfo((data.prInfo as PrInfo | undefined) ?? null);
+      setResultSignals(computeSignals(request, !!screenshotDataUrl, !!resolvedPrInfo));
+      setPrInfo(resolvedPrInfo);
       addHistoryEntry(request, diagnosis);
       setSimilarDiagnoses(findSimilarDiagnoses(diagnosis, priorHistory));
     } catch {
@@ -116,6 +139,7 @@ export default function Home() {
     setPrReference("");
     setScreenshotDataUrl(null);
     setResult(demo.result);
+    setResultSignals(computeSignals(demo.request, false, false));
     setSimilarDiagnoses([]);
     setPrInfo(null);
     toast.success("Demo example loaded — no API key needed to view this result.");
@@ -136,6 +160,7 @@ export default function Home() {
       setPrReference("");
       setScreenshotDataUrl(null);
       setResult(null);
+      setResultSignals(null);
       setSimilarDiagnoses([]);
       setPrInfo(null);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
@@ -154,12 +179,14 @@ export default function Home() {
     setPrReference(entry.request.prReference ?? "");
     setScreenshotDataUrl(null);
     setResult(entry.result);
+    setResultSignals(computeSignals(entry.request, false, false));
     setSimilarDiagnoses([]);
     setPrInfo(null);
   }
 
   function handleAnalyzeAgain() {
     setResult(null);
+    setResultSignals(null);
     setTestCode("");
     setCiLog("");
     setDomSnippet("");
@@ -628,7 +655,7 @@ export default function Home() {
                   </p>
                 )}
                 <SimilarDiagnoses items={similarDiagnoses} />
-                <DiagnosisPanel result={result} />
+                <DiagnosisPanel result={result} signals={resultSignals ?? undefined} />
                 <div className="flex justify-center">
                   <Button variant="ghost" onClick={handleAnalyzeAgain}>
                     <RotateCcw className="h-4 w-4" />
