@@ -82,24 +82,34 @@ export function computeDashboardStats(
         timestamp: e.timestamp,
         kind: "single",
         summary: `${FAILURE_TYPE_LABELS[e.result.failureType]} · ${FRAMEWORK_LABELS[e.request.framework]}`,
+        failureType: e.result.failureType,
+        framework: e.request.framework,
         confidence: e.result.confidence,
         risk: e.result.risk,
       })
     ),
-    ...bulk.map(
-      (e): DashboardActivityItem => ({
+    ...bulk.map((e): DashboardActivityItem => {
+      // Represent the whole run by its largest (primary) cluster — the same "primary root
+      // cause" a run is already summarized by in bulk-results.tsx — since a run can span
+      // several failure types and there's no single honest answer otherwise.
+      const primary = [...e.rows].sort((a, b) => b.cluster.memberCount - a.cluster.memberCount).find((r) => r.status === "ok");
+      return {
         id: e.id,
         timestamp: e.timestamp,
         kind: "bulk",
         summary: `${e.totalFailures} failures → ${e.totalClusters} root causes · ${FRAMEWORK_LABELS[e.framework]}`,
-      })
-    ),
+        failureType: primary?.diagnosis.failureType,
+        framework: e.framework,
+      };
+    }),
     ...flaky.map(
       (e): DashboardActivityItem => ({
         id: e.id,
         timestamp: e.timestamp,
         kind: "flaky",
         summary: `${e.testName ?? "Flaky analysis"} · ${e.stats.failureRate}% failure rate`,
+        failureType: e.result.failureType,
+        framework: e.framework,
         confidence: e.result.confidence,
         risk: e.result.risk,
       })

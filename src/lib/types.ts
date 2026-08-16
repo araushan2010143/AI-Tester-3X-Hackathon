@@ -183,6 +183,9 @@ export interface DashboardActivityItem {
   timestamp: number;
   kind: "single" | "bulk" | "flaky";
   summary: string;
+  /** Absent only for a bulk run where every cluster errored/was skipped — no honest single value exists. */
+  failureType?: FailureType;
+  framework: Framework;
   confidence?: number;
   risk?: RiskLevel;
 }
