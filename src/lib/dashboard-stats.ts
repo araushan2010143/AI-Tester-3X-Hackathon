@@ -11,6 +11,7 @@ import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS } from "./types";
 import type { BulkHistoryEntry } from "./bulk-types";
 
 const RISK_WEIGHT: Record<RiskLevel, number> = { low: 100, medium: 55, high: 10 };
+const VALID_RISK_LEVELS = new Set<RiskLevel>(["low", "medium", "high"]);
 
 function emptyRiskCounts(): Record<RiskLevel, number> {
   return { low: 0, medium: 0, high: 0 };
@@ -25,11 +26,16 @@ function tally(
   healthAcc: { sum: number; weight: number }
 ) {
   failureTypeCounts[result.failureType] = (failureTypeCounts[result.failureType] ?? 0) + weight;
-  riskCounts[result.risk] += weight;
   confidenceAcc.sum += result.confidence * weight;
   confidenceAcc.weight += weight;
-  healthAcc.sum += RISK_WEIGHT[result.risk] * weight;
-  healthAcc.weight += weight;
+
+  // Entries saved before `risk` existed on DiagnosisResult have no value here — leave them out
+  // of the risk-based stats entirely rather than let a missing value poison the whole average.
+  if (VALID_RISK_LEVELS.has(result.risk)) {
+    riskCounts[result.risk] += weight;
+    healthAcc.sum += RISK_WEIGHT[result.risk] * weight;
+    healthAcc.weight += weight;
+  }
 }
 
 /**
