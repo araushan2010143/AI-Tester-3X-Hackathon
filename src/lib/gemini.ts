@@ -4,7 +4,7 @@ import {
   SchemaType,
   type Schema,
 } from "@google/generative-ai";
-import type { DiagnoseRequest, DiagnosisResult } from "./types";
+import type { DiagnoseRequest, DiagnosisResult, FailureCluster, Framework } from "./types";
 import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS } from "./types";
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
@@ -67,6 +67,38 @@ ${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : 
 Respond with only the JSON object matching the required schema.`;
 }
 
+/**
+ * Bulk mode has no full test source — only a log-derived snippet shared by
+ * every member of the cluster. The prompt is honest about that: ground
+ * evidence in the snippet/test names actually available, and give the fix as
+ * an idiomatic pattern rather than claiming a literal line from a file we
+ * never saw.
+ */
+function buildBulkDiagnosisPrompt(cluster: FailureCluster, framework: Framework): string {
+  const sampleNames = cluster.testNames.slice(0, 8);
+  const moreCount = cluster.testNames.length - sampleNames.length;
+
+  return `You are a senior QA automation engineer triaging a batch of CI failures from a Jenkins run. ${cluster.memberCount} tests written in ${FRAMEWORK_LABELS[framework]} failed with what looks like the same underlying pattern, grouped by matching error signatures. You only have the log output for one representative failure, not the full test source — diagnose from that.
+
+Rules:
+- Ground every piece of evidence in specific details actually present in the log snippet below (selector strings, error messages, class names, identifiers). Never state a generic guess.
+- Pick exactly one failureType that best fits: ${FAILURE_TYPE_VALUES.join(", ")}.
+- confidence is 0-100 and should reflect how strong the evidence actually is — since this is inferred from a log snippet without the full test source, be honest if that caps how certain you can be.
+- Since you don't have the original file, "before" should be your best reconstruction of the specific broken line implied by the log (e.g. the selector/call visible in the stack trace), and "after" should be an idiomatic, resilient replacement pattern in ${FRAMEWORK_LABELS[framework]} — a pattern the engineer can adapt, not a guaranteed drop-in.
+- This diagnosis will be applied to all ${cluster.memberCount} tests in this cluster, so phrase the root cause and fix generally enough to cover the pattern, not just one specific test name.
+
+--- REPRESENTATIVE TEST ---
+${cluster.representative.testName}${cluster.representative.location ? ` (${cluster.representative.location})` : ""}
+
+--- LOG SNIPPET ---
+${cluster.representative.errorSnippet}
+
+--- OTHER AFFECTED TESTS IN THIS CLUSTER (${cluster.memberCount} total${moreCount > 0 ? `, showing ${sampleNames.length}` : ""}) ---
+${sampleNames.join("\n")}${moreCount > 0 ? `\n…and ${moreCount} more` : ""}
+
+Respond with only the JSON object matching the required schema.`;
+}
+
 export class GeminiNotConfiguredError extends Error {
   constructor() {
     super("GEMINI_API_KEY is not set on the server.");
@@ -83,22 +115,20 @@ export class GeminiOverloadedError extends Error {
 }
 
 const RETRYABLE_STATUSES = new Set([429, 503]);
-const RETRY_DELAYS_MS = [500, 1500]; // two retries after the initial attempt
+const RETRY_DELAYS_MS = [500, 1500, 4000]; // three retries after the initial attempt
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function diagnoseFailure(
-  req: DiagnoseRequest
-): Promise<Omit<DiagnosisResult, "framework">> {
+function getModel() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new GeminiNotConfiguredError();
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
+  return genAI.getGenerativeModel({
     model: MODEL_NAME,
     generationConfig: {
       responseMimeType: "application/json",
@@ -106,8 +136,11 @@ export async function diagnoseFailure(
       temperature: 0.2,
     },
   });
+}
 
-  const prompt = buildDiagnosisPrompt(req);
+/** Calls Gemini with retry/backoff on transient overload, parses the JSON response, clamps confidence. */
+async function callGeminiJson(prompt: string): Promise<Omit<DiagnosisResult, "framework">> {
+  const model = getModel();
 
   let text: string | undefined;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
@@ -140,4 +173,17 @@ export async function diagnoseFailure(
   parsed.confidence = Math.max(0, Math.min(100, Math.round(parsed.confidence)));
 
   return parsed;
+}
+
+export async function diagnoseFailure(
+  req: DiagnoseRequest
+): Promise<Omit<DiagnosisResult, "framework">> {
+  return callGeminiJson(buildDiagnosisPrompt(req));
+}
+
+export async function diagnoseCluster(
+  cluster: FailureCluster,
+  framework: Framework
+): Promise<Omit<DiagnosisResult, "framework">> {
+  return callGeminiJson(buildBulkDiagnosisPrompt(cluster, framework));
 }

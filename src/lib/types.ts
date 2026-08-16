@@ -52,3 +52,27 @@ export interface HistoryEntry {
   request: DiagnoseRequest;
   result: DiagnosisResult;
 }
+
+// --- Bulk mode (whole Jenkins log -> clustered diagnoses) ---
+
+export interface ParsedFailure {
+  id: string;
+  testName: string;
+  location?: string;
+  errorSnippet: string;
+}
+
+export interface FailureCluster {
+  fingerprint: string;
+  memberCount: number;
+  testNames: string[];
+  representative: ParsedFailure;
+}
+
+export type BulkStreamEvent =
+  | { type: "start"; totalFailures: number; totalClusters: number }
+  | { type: "cluster"; cluster: FailureCluster; diagnosis: DiagnosisResult }
+  | { type: "cluster-error"; cluster: FailureCluster; error: string }
+  | { type: "skipped-cluster"; cluster: FailureCluster }
+  | { type: "done"; clustersOk: number; clustersFailed: number; clustersSkipped: number }
+  | { type: "error"; message: string };
