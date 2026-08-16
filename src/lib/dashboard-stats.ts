@@ -97,7 +97,7 @@ export function computeDashboardStats(
         id: e.id,
         timestamp: e.timestamp,
         kind: "bulk",
-        summary: `${e.totalFailures} failures → ${e.totalClusters} root causes · ${FRAMEWORK_LABELS[e.framework]}`,
+        summary: `Build #${e.buildNumber} · ${e.totalFailures} failures → ${e.totalClusters} root causes · ${FRAMEWORK_LABELS[e.framework]}`,
         failureType: primary?.diagnosis.failureType,
         framework: e.framework,
       };

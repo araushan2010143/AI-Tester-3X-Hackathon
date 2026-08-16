@@ -34,7 +34,7 @@ export function DiagnosisPanel({ result, signals }: DiagnosisPanelProps) {
           </span>
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Diagnosis</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">AI Root Cause</p>
               <Badge variant="outline" className="text-[10px] uppercase">
                 {fwName}
               </Badge>

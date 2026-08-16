@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { RunTimeline } from "@/components/run-timeline";
+import { BuildHistoryList } from "@/components/build-history-list";
 import { FlakinessSignals } from "@/components/flakiness-signals";
 import { RUN_PATTERN_LABELS, type RunHistoryStats } from "@/lib/types";
 
@@ -56,6 +57,10 @@ export function FlakyStatsPanel({ stats }: { stats: RunHistoryStats }) {
         </div>
 
         <RunTimeline outcomes={stats.outcomes} />
+
+        <Separator />
+
+        <BuildHistoryList outcomes={stats.outcomes} />
 
         <Separator />
 

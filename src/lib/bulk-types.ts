@@ -10,6 +10,10 @@ export type ClusterRowState =
 export interface BulkHistoryEntry {
   id: string;
   timestamp: number;
+  /** This device's own monotonically-increasing count of bulk analyses run — survives the
+   *  MAX_ENTRIES eviction cap, same way a real CI system's build number keeps climbing even
+   *  after old builds are pruned. Not a real Jenkins/GitHub build number, just labeled honestly. */
+  buildNumber: number;
   framework: Framework;
   totalFailures: number;
   totalClusters: number;

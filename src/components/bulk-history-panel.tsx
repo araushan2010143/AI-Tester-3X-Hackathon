@@ -74,16 +74,14 @@ export function BulkHistoryPanel({ onSelect }: BulkHistoryPanelProps) {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-medium">
-                            {entry.totalFailures} failures → {entry.totalClusters} root causes
-                          </p>
+                          <p className="truncate text-sm font-medium">Build #{entry.buildNumber}</p>
                           <Badge variant="secondary" className="shrink-0 text-xs">
                             {ok}/{entry.totalClusters} diagnosed
                           </Badge>
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
-                          {FRAMEWORK_LABELS[entry.framework]} ·{" "}
-                          {new Date(entry.timestamp).toLocaleString()}
+                          {entry.totalFailures} failures → {entry.totalClusters} root causes ·{" "}
+                          {FRAMEWORK_LABELS[entry.framework]} · {new Date(entry.timestamp).toLocaleString()}
                         </p>
                       </div>
                     </button>

@@ -23,7 +23,7 @@ import { FlakyStatsPanel } from "@/components/flaky-stats-panel";
 import { SimilarDiagnoses } from "@/components/similar-diagnoses";
 import { DashboardView } from "@/components/dashboard-view";
 import { addHistoryEntry, getHistory, clearHistory } from "@/lib/history";
-import { addBulkHistoryEntry, clearBulkHistory, getBulkHistory } from "@/lib/bulk-history";
+import { addBulkHistoryEntry, clearBulkHistory, getBulkHistory, getNextBuildNumber } from "@/lib/bulk-history";
 import { addFlakyHistoryEntry, getFlakyHistory, clearFlakyHistory } from "@/lib/flaky-history";
 import { computeDashboardStats } from "@/lib/dashboard-stats";
 import { findSimilarDiagnoses } from "@/lib/similar-diagnoses";
@@ -204,6 +204,7 @@ export default function Home() {
   const [bulkLog, setBulkLog] = useState("");
   const [bulkStreaming, setBulkStreaming] = useState(false);
   const [bulkStarted, setBulkStarted] = useState(false);
+  const [bulkBuildNumber, setBulkBuildNumber] = useState(0);
   const [bulkTotalFailures, setBulkTotalFailures] = useState(0);
   const [bulkTotalClusters, setBulkTotalClusters] = useState(0);
   const [bulkRows, setBulkRows] = useState<ClusterRowState[]>([]);
@@ -215,6 +216,7 @@ export default function Home() {
   function handleSelectBulkHistory(entry: BulkHistoryEntry) {
     setMode("bulk");
     setBulkFramework(entry.framework);
+    setBulkBuildNumber(entry.buildNumber);
     setBulkTotalFailures(entry.totalFailures);
     setBulkTotalClusters(entry.totalClusters);
     setBulkRows(entry.rows);
@@ -238,6 +240,7 @@ export default function Home() {
       setBulkLog("");
       setBulkStarted(false);
       setBulkRows([]);
+      setBulkBuildNumber(0);
       setBulkTotalFailures(0);
       setBulkTotalClusters(0);
       setBulkCiProvider(undefined);
@@ -252,6 +255,10 @@ export default function Home() {
       return;
     }
 
+    // Reserved up front, not on completion, so the same number shows live during streaming
+    // and matches exactly what gets saved to history when the run finishes.
+    const buildNumber = getNextBuildNumber();
+    setBulkBuildNumber(buildNumber);
     setBulkStreaming(true);
     setBulkStarted(true);
     setBulkRows([]);
@@ -319,7 +326,7 @@ export default function Home() {
             setBulkRows((prev) => [...prev, row]);
           } else if (event.type === "done") {
             if (collectedTotalFailures > 0) {
-              addBulkHistoryEntry(bulkFramework, collectedTotalFailures, collectedTotalClusters, collectedRows);
+              addBulkHistoryEntry(bulkFramework, buildNumber, collectedTotalFailures, collectedTotalClusters, collectedRows);
             }
             toast.success(
               `Done — ${event.clustersOk} root cause${event.clustersOk === 1 ? "" : "s"} diagnosed${
@@ -717,6 +724,7 @@ export default function Home() {
 
             {bulkStarted && bulkTotalFailures > 0 && (
               <BulkResults
+                buildNumber={bulkBuildNumber}
                 totalFailures={bulkTotalFailures}
                 totalClusters={bulkTotalClusters}
                 rows={bulkRows}

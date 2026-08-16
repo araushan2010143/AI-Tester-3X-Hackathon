@@ -10,6 +10,7 @@ import { FAILURE_TYPE_LABELS, type CiProvider, type SharedIdentifierGroup } from
 import type { ClusterRowState } from "@/lib/bulk-types";
 
 interface BulkResultsProps {
+  buildNumber: number;
   totalFailures: number;
   totalClusters: number;
   rows: ClusterRowState[];
@@ -28,6 +29,7 @@ function scrollToRow(value: string) {
 }
 
 export function BulkResults({
+  buildNumber,
   totalFailures,
   totalClusters,
   rows,
@@ -50,7 +52,7 @@ export function BulkResults({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Triage summary</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Build #{buildNumber}</p>
               <h2 className="text-lg font-semibold">
                 {totalFailures} {totalFailures === 1 ? "failure" : "failures"} → {totalClusters}{" "}
                 {totalClusters === 1 ? "root cause" : "root causes"}
