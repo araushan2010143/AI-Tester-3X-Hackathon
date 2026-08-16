@@ -1,7 +1,9 @@
 "use client";
 
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
+import { useTheme } from "next-themes";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHydrated } from "@/lib/use-hydrated";
 
 interface CodeEditorProps {
   value: string;
@@ -31,15 +33,21 @@ export function CodeEditor({
   height = "260px",
   ariaLabel,
 }: CodeEditorProps) {
+  // `resolvedTheme` is unknown during SSR — default to dark (matches layout.tsx's
+  // defaultTheme="dark") until hydrated, then track the real theme afterward.
+  const { resolvedTheme } = useTheme();
+  const mounted = useHydrated();
+  const isLight = mounted && resolvedTheme === "light";
+
   const handleMount: OnMount = (editor) => {
     if (ariaLabel) {
       editor.getDomNode()?.setAttribute("aria-label", ariaLabel);
     }
   };
 
-  // Monaco's built-in "vs-dark" is a hardcoded #1e1e1e, unrelated to the app's navy tokens —
-  // define a theme that matches so the editor reads as recessed below its card, not a
-  // mismatched gray box sitting on top of it.
+  // Monaco's built-in themes ("vs-dark"/"vs") are hardcoded, unrelated to the app's tokens —
+  // define both so the editor always reads as recessed below its card (background matches
+  // --background in each theme), not a mismatched box sitting on top of it.
   const handleBeforeMount: BeforeMount = (monaco) => {
     monaco.editor.defineTheme("tracefix-dark", {
       base: "vs-dark",
@@ -55,6 +63,20 @@ export function CodeEditor({
         "editor.inactiveSelectionBackground": "#4f8cff22",
       },
     });
+    monaco.editor.defineTheme("tracefix-light", {
+      base: "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": "#f7f9fc",
+        "editor.foreground": "#101828",
+        "editorLineNumber.foreground": "#94a3b8",
+        "editorLineNumber.activeForeground": "#5b6472",
+        "editorCursor.foreground": "#4f8cff",
+        "editor.selectionBackground": "#4f8cff26",
+        "editor.inactiveSelectionBackground": "#4f8cff18",
+      },
+    });
   };
 
   return (
@@ -62,7 +84,7 @@ export function CodeEditor({
       <Editor
         height={height}
         language={language}
-        theme="tracefix-dark"
+        theme={isLight ? "tracefix-light" : "tracefix-dark"}
         value={value}
         onChange={(v) => onChange(v ?? "")}
         beforeMount={handleBeforeMount}

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { LayoutDashboard, Search, ListTree, Activity } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export type AppMode = "single" | "bulk" | "flaky" | "dashboard";
 
@@ -67,6 +68,10 @@ export function AppSidebar({ mode, onModeChange }: { mode: AppMode; onModeChange
           </ul>
         </div>
       </nav>
+
+      <div className="border-t border-sidebar-border px-3 py-3">
+        <ThemeToggle />
+      </div>
     </aside>
   );
 }
