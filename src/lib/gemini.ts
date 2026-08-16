@@ -4,8 +4,8 @@ import {
   SchemaType,
   type Schema,
 } from "@google/generative-ai";
-import type { DiagnoseRequest, DiagnosisResult, FailureCluster, Framework } from "./types";
-import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS } from "./types";
+import type { DiagnoseRequest, DiagnosisResult, FailureCluster, FlakyDiagnoseRequest, Framework, RunHistoryStats } from "./types";
+import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS, RUN_PATTERN_LABELS } from "./types";
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
@@ -123,6 +123,33 @@ ${sampleNames.join("\n")}${moreCount > 0 ? `\n…and ${moreCount} more` : ""}
 Respond with only the JSON object matching the required schema.`;
 }
 
+/**
+ * Flaky-mode prompt: the failure rate/streak/pattern are already computed
+ * deterministically (see lib/run-history.ts) and handed over as facts, not
+ * asked for — Gemini's job is to explain *why*, grounded in the pattern and
+ * whatever log/test code is available, not to guess at the arithmetic.
+ */
+function buildFlakyDiagnosisPrompt(stats: RunHistoryStats, req: FlakyDiagnoseRequest): string {
+  return `You are a senior QA automation engineer investigating whether a test is genuinely flaky or has a real, persistent root cause. A test written in ${FRAMEWORK_LABELS[req.framework]}${req.testName ? ` ("${req.testName}")` : ""} has this run history. The statistics below are already computed — use them as facts, do not re-derive or contradict them:
+
+- Total runs: ${stats.totalRuns}
+- Failed runs: ${stats.failedRuns} (${stats.failureRate}% failure rate)
+- Longest consecutive-failure streak: ${stats.longestFailStreak}
+- Detected pattern: ${RUN_PATTERN_LABELS[stats.pattern]}
+- Run sequence: ${stats.outcomes.map((o) => `${o.run}:${o.status.toUpperCase()}`).join(", ")}
+
+Rules:
+- Ground every piece of evidence in the numbers above and in any log/test code provided below. Never state a generic guess.
+- Pick exactly one failureType — use the sharpest fitting category, not the closest generic one:
+${CATEGORY_GUIDANCE}
+- The detected pattern is important context: "${RUN_PATTERN_LABELS["alternating"]}" across otherwise-identical runs points toward flaky_test (real non-determinism/race condition). Failures clustered in the most recent runs more often means a real regression — application_bug, dependency_issue, or environment_issue — than flakiness. Don't default to flaky_test just because the failure rate isn't 100%.
+- confidence is 0-100 and should reflect how strong the evidence actually is.
+- risk reflects how safe it is to apply the fix and move on: low for a clean, mechanical fix; high whenever the evidence could instead mean a real application bug or something needing a human to dig further.
+- The fix must be idiomatic, resilient, production-ready code in ${FRAMEWORK_LABELS[req.framework]}.
+${req.testCode ? `\n--- TEST CODE ---\n${req.testCode}\n` : ""}${req.failureLog ? `\n--- LOG FROM A RECENT FAILING RUN ---\n${req.failureLog}\n` : ""}
+Respond with only the JSON object matching the required schema.`;
+}
+
 export class GeminiNotConfiguredError extends Error {
   constructor() {
     super("GEMINI_API_KEY is not set on the server.");
@@ -210,4 +237,11 @@ export async function diagnoseCluster(
   framework: Framework
 ): Promise<Omit<DiagnosisResult, "framework">> {
   return callGeminiJson(buildBulkDiagnosisPrompt(cluster, framework));
+}
+
+export async function diagnoseFlakiness(
+  stats: RunHistoryStats,
+  req: FlakyDiagnoseRequest
+): Promise<Omit<DiagnosisResult, "framework">> {
+  return callGeminiJson(buildFlakyDiagnosisPrompt(stats, req));
 }

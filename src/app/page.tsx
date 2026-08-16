@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, RotateCcw, Search, ListTree } from "lucide-react";
+import { Sparkles, RotateCcw, Search, ListTree, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeEditor } from "@/components/code-editor";
 import { FrameworkSelector } from "@/components/framework-selector";
@@ -15,11 +16,13 @@ import { EmptyState } from "@/components/empty-state";
 import { HistoryPanel } from "@/components/history-panel";
 import { BulkHistoryPanel } from "@/components/bulk-history-panel";
 import { BulkResults } from "@/components/bulk-results";
+import { FlakyStatsPanel } from "@/components/flaky-stats-panel";
 import { addHistoryEntry } from "@/lib/history";
 import { addBulkHistoryEntry } from "@/lib/bulk-history";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
-import { FRAMEWORK_LABELS, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent } from "@/lib/types";
+import { DEMO_FLAKY_RUN } from "@/lib/demo-flaky-run";
+import { FRAMEWORK_LABELS, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type RunHistoryStats } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
@@ -29,7 +32,7 @@ const MONACO_LANGUAGE: Record<Framework, string> = {
 };
 
 export default function Home() {
-  const [mode, setMode] = useState<"single" | "bulk">("single");
+  const [mode, setMode] = useState<"single" | "bulk" | "flaky">("single");
 
   // --- Single-test mode ---
   const [framework, setFramework] = useState<Framework>("playwright-ts");
@@ -233,6 +236,77 @@ export default function Home() {
     }
   }
 
+  // --- Flaky-test mode ---
+  const [flakyFramework, setFlakyFramework] = useState<Framework>("playwright-ts");
+  const [testName, setTestName] = useState("");
+  const [runHistoryText, setRunHistoryText] = useState("");
+  const [flakyTestCode, setFlakyTestCode] = useState("");
+  const [flakyFailureLog, setFlakyFailureLog] = useState("");
+  const [flakyStats, setFlakyStats] = useState<RunHistoryStats | null>(null);
+  const [flakyResult, setFlakyResult] = useState<DiagnosisResult | null>(null);
+  const [flakyLoading, setFlakyLoading] = useState(false);
+
+  const canAnalyzeFlaky = runHistoryText.trim().length > 0 && !flakyLoading;
+
+  function handleLoadFlakyDemo() {
+    setFlakyFramework(DEMO_FLAKY_RUN.framework);
+    setTestName(DEMO_FLAKY_RUN.testName);
+    setRunHistoryText(DEMO_FLAKY_RUN.runHistoryText);
+    setFlakyTestCode(DEMO_FLAKY_RUN.testCode);
+    setFlakyFailureLog(DEMO_FLAKY_RUN.failureLog);
+    setFlakyStats(null);
+    setFlakyResult(null);
+    toast.success("Demo run history loaded — hit Analyze Flakiness to run the real diagnosis.");
+  }
+
+  function handleFlakyAnalyzeAgain() {
+    setFlakyStats(null);
+    setFlakyResult(null);
+    setTestName("");
+    setRunHistoryText("");
+    setFlakyTestCode("");
+    setFlakyFailureLog("");
+  }
+
+  async function handleAnalyzeFlaky() {
+    if (!canAnalyzeFlaky) {
+      toast.error("Paste the run history first.");
+      return;
+    }
+
+    setFlakyLoading(true);
+    setFlakyStats(null);
+    setFlakyResult(null);
+
+    try {
+      const res = await fetch("/api/diagnose-flaky", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runHistoryText,
+          testName: testName.trim() || undefined,
+          testCode: flakyTestCode.trim() || undefined,
+          failureLog: flakyFailureLog.trim() || undefined,
+          framework: flakyFramework,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.stats) setFlakyStats(data.stats as RunHistoryStats);
+
+      if (!res.ok) {
+        toast.error(data.error || "Flaky analysis failed.");
+        return;
+      }
+
+      setFlakyResult(data.diagnosis as DiagnosisResult);
+    } catch {
+      toast.error("Couldn't reach the diagnose API. Check your connection and try again.");
+    } finally {
+      setFlakyLoading(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -248,7 +322,7 @@ export default function Home() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {mode === "single" ? (
+          {mode === "single" && (
             <>
               <Button variant="outline" size="sm" onClick={handleLoadDemo}>
                 <Sparkles className="h-4 w-4" />
@@ -256,7 +330,8 @@ export default function Home() {
               </Button>
               <HistoryPanel onSelect={handleSelectHistory} />
             </>
-          ) : (
+          )}
+          {mode === "bulk" && (
             <>
               <Button variant="outline" size="sm" onClick={handleLoadBulkDemo}>
                 <Sparkles className="h-4 w-4" />
@@ -265,13 +340,20 @@ export default function Home() {
               <BulkHistoryPanel onSelect={handleSelectBulkHistory} />
             </>
           )}
+          {mode === "flaky" && (
+            <Button variant="outline" size="sm" onClick={handleLoadFlakyDemo}>
+              <Sparkles className="h-4 w-4" />
+              Load Demo History
+            </Button>
+          )}
         </div>
       </header>
 
-      <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "bulk")}>
+      <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "bulk" | "flaky")}>
         <TabsList>
           <TabsTrigger value="single">Single Test</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Log (Jenkins)</TabsTrigger>
+          <TabsTrigger value="flaky">Flaky Test</TabsTrigger>
         </TabsList>
 
         <TabsContent value="single" className="flex flex-col gap-8 pt-6">
@@ -416,6 +498,108 @@ export default function Home() {
               <EmptyState
                 title="No analysis yet"
                 description="Paste a Jenkins console log above, then hit Analyze Log — or load the demo log."
+              />
+            )}
+          </section>
+        </TabsContent>
+
+        <TabsContent value="flaky" className="flex flex-col gap-8 pt-6">
+          <Card>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <label className="text-sm font-medium">Test Framework</label>
+                <FrameworkSelector value={flakyFramework} onChange={setFlakyFramework} />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold">
+                  Test Name <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <Input
+                  value={testName}
+                  onChange={(e) => setTestName(e.target.value)}
+                  placeholder="e.g. displays search results after typing"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold">Run History</label>
+                <p className="text-xs text-muted-foreground">
+                  Paste one outcome per run, in order — e.g. &quot;Run #101 → PASS&quot;. The failure rate and
+                  pattern are computed locally; Gemini only explains what they mean.
+                </p>
+                <CodeEditor
+                  value={runHistoryText}
+                  onChange={setRunHistoryText}
+                  language="plaintext"
+                  height="200px"
+                  ariaLabel="Run history"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold">
+                    Test Code <span className="font-normal text-muted-foreground">(optional)</span>
+                  </label>
+                  <CodeEditor
+                    value={flakyTestCode}
+                    onChange={setFlakyTestCode}
+                    language={MONACO_LANGUAGE[flakyFramework]}
+                    ariaLabel="Test code"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold">
+                    Log From a Recent Failure <span className="font-normal text-muted-foreground">(optional)</span>
+                  </label>
+                  <CodeEditor
+                    value={flakyFailureLog}
+                    onChange={setFlakyFailureLog}
+                    language="plaintext"
+                    ariaLabel="Recent failure log"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-center">
+            <Button size="lg" onClick={handleAnalyzeFlaky} disabled={!canAnalyzeFlaky}>
+              <Activity className="h-4 w-4" />
+              {flakyLoading ? "Analyzing…" : "Analyze Flakiness"}
+            </Button>
+          </div>
+
+          <section className="space-y-4">
+            {flakyLoading && (
+              <Card>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-8 w-2/3" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                </CardContent>
+              </Card>
+            )}
+
+            {!flakyLoading && flakyStats && <FlakyStatsPanel stats={flakyStats} />}
+
+            {!flakyLoading && flakyResult && (
+              <>
+                <DiagnosisPanel result={flakyResult} />
+                <div className="flex justify-center">
+                  <Button variant="ghost" onClick={handleFlakyAnalyzeAgain}>
+                    <RotateCcw className="h-4 w-4" />
+                    Analyze Again
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {!flakyLoading && !flakyStats && !flakyResult && (
+              <EmptyState
+                title="No analysis yet"
+                description="Paste real CI run history above, then hit Analyze Flakiness — or load the demo history."
               />
             )}
           </section>
