@@ -70,7 +70,7 @@ export function ClusterRow({
     const Icon = meta.icon;
 
     return (
-      <AccordionItem value={value}>
+      <AccordionItem value={value} id={`cluster-row-${value}`}>
         <AccordionTrigger>
           <RowHeader
             cluster={state.cluster}
