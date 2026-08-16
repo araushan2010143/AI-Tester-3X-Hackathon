@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { diagnoseFailure, GeminiNotConfiguredError } from "@/lib/gemini";
+import { diagnoseFailure, GeminiNotConfiguredError, GeminiOverloadedError } from "@/lib/gemini";
 import type { DiagnoseRequest, DiagnosisResult, Framework } from "@/lib/types";
 
 const VALID_FRAMEWORKS: Framework[] = ["playwright-ts", "selenium-java"];
@@ -43,6 +43,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "GEMINI_API_KEY is not set. Add it to .env.local and restart the dev server." },
         { status: 500 }
+      );
+    }
+    if (err instanceof GeminiOverloadedError) {
+      console.warn("Diagnose route: Gemini overloaded after retries.");
+      return NextResponse.json(
+        { error: "Gemini is busy right now (high demand on Google's side). Wait a few seconds and hit Diagnose & Fix again." },
+        { status: 503 }
       );
     }
     console.error("Diagnose route failed:", err);

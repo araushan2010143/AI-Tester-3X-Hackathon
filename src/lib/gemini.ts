@@ -1,4 +1,9 @@
-import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
+import {
+  GoogleGenerativeAI,
+  GoogleGenerativeAIFetchError,
+  SchemaType,
+  type Schema,
+} from "@google/generative-ai";
 import type { DiagnoseRequest, DiagnosisResult } from "./types";
 import { FAILURE_TYPE_LABELS, FRAMEWORK_LABELS } from "./types";
 
@@ -69,6 +74,21 @@ export class GeminiNotConfiguredError extends Error {
   }
 }
 
+/** Gemini itself is overloaded/rate-limited (503/429) — transient, not a bug in this app. */
+export class GeminiOverloadedError extends Error {
+  constructor() {
+    super("Gemini is currently overloaded. Please try again in a few seconds.");
+    this.name = "GeminiOverloadedError";
+  }
+}
+
+const RETRYABLE_STATUSES = new Set([429, 503]);
+const RETRY_DELAYS_MS = [500, 1500]; // two retries after the initial attempt
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function diagnoseFailure(
   req: DiagnoseRequest
 ): Promise<Omit<DiagnosisResult, "framework">> {
@@ -88,12 +108,30 @@ export async function diagnoseFailure(
   });
 
   const prompt = buildDiagnosisPrompt(req);
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
+
+  let text: string | undefined;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const result = await model.generateContent(prompt);
+      text = result.response.text();
+      break;
+    } catch (err) {
+      const isRetryable =
+        err instanceof GoogleGenerativeAIFetchError &&
+        typeof err.status === "number" &&
+        RETRYABLE_STATUSES.has(err.status);
+
+      if (!isRetryable || attempt === RETRY_DELAYS_MS.length) {
+        if (isRetryable) throw new GeminiOverloadedError();
+        throw err;
+      }
+      await sleep(RETRY_DELAYS_MS[attempt]);
+    }
+  }
 
   let parsed: Omit<DiagnosisResult, "framework">;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(text!);
   } catch {
     throw new Error("Gemini returned a response that could not be parsed as JSON.");
   }
