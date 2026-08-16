@@ -154,3 +154,46 @@ export interface FlakyDiagnoseRequest {
   failureLog?: string;
   framework: Framework;
 }
+
+/** A completed flaky-test analysis, saved to its own history store (see lib/flaky-history.ts). */
+export interface FlakyHistoryEntry {
+  id: string;
+  timestamp: number;
+  framework: Framework;
+  testName?: string;
+  stats: RunHistoryStats;
+  result: DiagnosisResult;
+}
+
+// --- Dashboard (aggregated from the three history stores, computed locally) ---
+
+export interface DashboardActivityItem {
+  id: string;
+  timestamp: number;
+  kind: "single" | "bulk" | "flaky";
+  summary: string;
+  confidence?: number;
+  risk?: RiskLevel;
+}
+
+export interface DashboardStats {
+  totalSingleDiagnoses: number;
+  totalBulkFailuresTriaged: number;
+  totalBulkClustersDiagnosed: number;
+  totalFlakyAnalyses: number;
+  failureTypeCounts: Partial<Record<FailureType, number>>;
+  riskCounts: Record<RiskLevel, number>;
+  avgConfidence: number | null;
+  /** 0-100, weighted average of risk (low=100, medium=55, high=10) across every diagnosis. */
+  testHealthScore: number | null;
+  /** Mean failure rate across flaky-test analyses. Null, not 0, when there's no flaky history yet. */
+  flakinessScore: number | null;
+  recentActivity: DashboardActivityItem[];
+}
+
+// --- Similar-past-diagnoses correlation (single-test mode) ---
+
+export interface SimilarDiagnosis {
+  entry: HistoryEntry;
+  sharedKeywords: string[];
+}

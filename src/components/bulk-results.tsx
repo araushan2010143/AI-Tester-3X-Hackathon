@@ -3,8 +3,8 @@ import { Accordion } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ClusterRow } from "@/components/cluster-row";
 import { SharedDataWarning } from "@/components/shared-data-warning";
-import { FAILURE_TYPE_META } from "@/components/failure-meta";
-import { FAILURE_TYPE_LABELS, type CiProvider, type FailureType, type SharedIdentifierGroup } from "@/lib/types";
+import { FailureTypeBreakdown } from "@/components/failure-type-breakdown";
+import type { CiProvider, FailureType, SharedIdentifierGroup } from "@/lib/types";
 import type { ClusterRowState } from "@/lib/bulk-types";
 
 interface BulkResultsProps {
@@ -21,33 +21,13 @@ const CI_PROVIDER_LABELS: Record<Exclude<CiProvider, "unknown">, string> = {
   jenkins: "Jenkins",
 };
 
-function FailureTypeBreakdown({ rows }: { rows: ClusterRowState[] }) {
-  const counts = new Map<FailureType, number>();
+function countsFromRows(rows: ClusterRowState[]): Partial<Record<FailureType, number>> {
+  const counts: Partial<Record<FailureType, number>> = {};
   for (const row of rows) {
     if (row.status !== "ok") continue;
-    counts.set(row.diagnosis.failureType, (counts.get(row.diagnosis.failureType) ?? 0) + row.cluster.memberCount);
+    counts[row.diagnosis.failureType] = (counts[row.diagnosis.failureType] ?? 0) + row.cluster.memberCount;
   }
-  if (counts.size === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {[...counts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([type, count]) => {
-          const meta = FAILURE_TYPE_META[type];
-          const Icon = meta.icon;
-          return (
-            <span
-              key={type}
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${meta.className}`}
-            >
-              <Icon className="h-3 w-3" />
-              {FAILURE_TYPE_LABELS[type]} · {count}
-            </span>
-          );
-        })}
-    </div>
-  );
+  return counts;
 }
 
 export function BulkResults({
@@ -89,7 +69,7 @@ export function BulkResults({
             </span>
           )}
         </div>
-        <FailureTypeBreakdown rows={rows} />
+        <FailureTypeBreakdown counts={countsFromRows(rows)} />
       </CardHeader>
       <CardContent className="space-y-4">
         {sharedIdentifiers && sharedIdentifiers.length > 0 && <SharedDataWarning groups={sharedIdentifiers} />}

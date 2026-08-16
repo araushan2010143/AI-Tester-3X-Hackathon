@@ -19,12 +19,17 @@ import { HistoryPanel } from "@/components/history-panel";
 import { BulkHistoryPanel } from "@/components/bulk-history-panel";
 import { BulkResults } from "@/components/bulk-results";
 import { FlakyStatsPanel } from "@/components/flaky-stats-panel";
-import { addHistoryEntry } from "@/lib/history";
-import { addBulkHistoryEntry } from "@/lib/bulk-history";
+import { SimilarDiagnoses } from "@/components/similar-diagnoses";
+import { DashboardView } from "@/components/dashboard-view";
+import { addHistoryEntry, getHistory, clearHistory } from "@/lib/history";
+import { addBulkHistoryEntry, clearBulkHistory, getBulkHistory } from "@/lib/bulk-history";
+import { addFlakyHistoryEntry, getFlakyHistory, clearFlakyHistory } from "@/lib/flaky-history";
+import { computeDashboardStats } from "@/lib/dashboard-stats";
+import { findSimilarDiagnoses } from "@/lib/similar-diagnoses";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
 import { DEMO_FLAKY_RUN } from "@/lib/demo-flaky-run";
-import { FRAMEWORK_LABELS, type CiProvider, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type RunHistoryStats, type SharedIdentifierGroup } from "@/lib/types";
+import { FRAMEWORK_LABELS, type CiProvider, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
@@ -34,7 +39,7 @@ const MONACO_LANGUAGE: Record<Framework, string> = {
 };
 
 export default function Home() {
-  const [mode, setMode] = useState<"single" | "bulk" | "flaky">("single");
+  const [mode, setMode] = useState<"single" | "bulk" | "flaky" | "dashboard">("single");
 
   // --- Single-test mode ---
   const [framework, setFramework] = useState<Framework>("playwright-ts");
@@ -46,6 +51,7 @@ export default function Home() {
   const [environmentInfo, setEnvironmentInfo] = useState("");
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
+  const [similarDiagnoses, setSimilarDiagnoses] = useState<SimilarDiagnosis[]>([]);
   const [loading, setLoading] = useState(false);
 
   const canDiagnose = testCode.trim().length > 0 && ciLog.trim().length > 0 && !loading;
@@ -82,8 +88,11 @@ export default function Home() {
         return;
       }
 
+      // Snapshot history *before* saving the new entry, so the just-added one doesn't trivially match itself.
+      const priorHistory = getHistory();
       setResult(data as DiagnosisResult);
       addHistoryEntry(request, data as DiagnosisResult);
+      setSimilarDiagnoses(findSimilarDiagnoses(data as DiagnosisResult, priorHistory));
     } catch {
       toast.error("Couldn't reach the diagnose API. Check your connection and try again.");
     } finally {
@@ -101,6 +110,7 @@ export default function Home() {
     setEnvironmentInfo("");
     setScreenshotDataUrl(null);
     setResult(demo.result);
+    setSimilarDiagnoses([]);
     toast.success("Demo example loaded — no API key needed to view this result.");
   }
 
@@ -118,6 +128,7 @@ export default function Home() {
       setEnvironmentInfo("");
       setScreenshotDataUrl(null);
       setResult(null);
+      setSimilarDiagnoses([]);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
     }
   }
@@ -133,6 +144,7 @@ export default function Home() {
     setEnvironmentInfo(entry.request.environmentInfo ?? "");
     setScreenshotDataUrl(null);
     setResult(entry.result);
+    setSimilarDiagnoses([]);
   }
 
   function handleAnalyzeAgain() {
@@ -144,6 +156,7 @@ export default function Home() {
     setNetworkLog("");
     setEnvironmentInfo("");
     setScreenshotDataUrl(null);
+    setSimilarDiagnoses([]);
   }
 
   // --- Bulk mode ---
@@ -332,12 +345,35 @@ export default function Home() {
         return;
       }
 
-      setFlakyResult(data.diagnosis as DiagnosisResult);
+      const diagnosis = data.diagnosis as DiagnosisResult;
+      setFlakyResult(diagnosis);
+      addFlakyHistoryEntry(flakyFramework, testName.trim() || undefined, data.stats as RunHistoryStats, diagnosis);
     } catch {
       toast.error("Couldn't reach the diagnose API. Check your connection and try again.");
     } finally {
       setFlakyLoading(false);
     }
+  }
+
+  // --- Dashboard ---
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+
+  function refreshDashboard() {
+    setDashboardStats(computeDashboardStats(getHistory(), getBulkHistory(), getFlakyHistory()));
+  }
+
+  function handleModeChange(next: string) {
+    const nextMode = next as "single" | "bulk" | "flaky" | "dashboard";
+    setMode(nextMode);
+    if (nextMode === "dashboard") refreshDashboard();
+  }
+
+  function handleClearAllHistory() {
+    clearHistory();
+    clearBulkHistory();
+    clearFlakyHistory();
+    refreshDashboard();
+    toast.success("Cleared all history.");
   }
 
   return (
@@ -382,11 +418,12 @@ export default function Home() {
         </div>
       </header>
 
-      <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "bulk" | "flaky")}>
+      <Tabs value={mode} onValueChange={handleModeChange}>
         <TabsList>
           <TabsTrigger value="single">Single Test</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Log (Jenkins)</TabsTrigger>
           <TabsTrigger value="flaky">Flaky Test</TabsTrigger>
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
         </TabsList>
 
         <TabsContent value="single" className="flex flex-col gap-8 pt-6">
@@ -500,6 +537,7 @@ export default function Home() {
 
             {!loading && result && (
               <>
+                <SimilarDiagnoses items={similarDiagnoses} />
                 <DiagnosisPanel result={result} />
                 <div className="flex justify-center">
                   <Button variant="ghost" onClick={handleAnalyzeAgain}>
@@ -685,6 +723,10 @@ export default function Home() {
               />
             )}
           </section>
+        </TabsContent>
+
+        <TabsContent value="dashboard" className="pt-6">
+          {dashboardStats && <DashboardView stats={dashboardStats} onClearAll={handleClearAllHistory} />}
         </TabsContent>
       </Tabs>
     </div>
