@@ -1,0 +1,54 @@
+import {
+  Crosshair,
+  Clock,
+  XCircle,
+  WifiOff,
+  Server,
+  Shuffle,
+  Bug,
+  type LucideIcon,
+} from "lucide-react";
+import type { FailureType } from "@/lib/types";
+
+interface FailureMeta {
+  icon: LucideIcon;
+  /** Tailwind classes for text + background tint, used on badges/icons. */
+  className: string;
+}
+
+export const FAILURE_TYPE_META: Record<FailureType, FailureMeta> = {
+  locator_breakage: {
+    icon: Crosshair,
+    className: "text-amber-500 bg-amber-500/10",
+  },
+  timing_race_condition: {
+    icon: Clock,
+    className: "text-orange-500 bg-orange-500/10",
+  },
+  assertion_failure: {
+    icon: XCircle,
+    className: "text-red-500 bg-red-500/10",
+  },
+  network_api_failure: {
+    icon: WifiOff,
+    className: "text-blue-500 bg-blue-500/10",
+  },
+  environment_issue: {
+    icon: Server,
+    className: "text-purple-500 bg-purple-500/10",
+  },
+  flaky_test: {
+    icon: Shuffle,
+    className: "text-yellow-500 bg-yellow-500/10",
+  },
+  application_bug: {
+    icon: Bug,
+    className: "text-rose-500 bg-rose-500/10",
+  },
+};
+
+export function confidenceClassName(confidence: number): string {
+  if (confidence >= 80) return "text-emerald-500 bg-emerald-500/10";
+  if (confidence >= 50) return "text-amber-500 bg-amber-500/10";
+  return "text-red-500 bg-red-500/10";
+}
