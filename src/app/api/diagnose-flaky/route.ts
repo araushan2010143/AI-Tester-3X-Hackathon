@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { diagnoseFlakiness, GeminiNotConfiguredError, GeminiOverloadedError } from "@/lib/gemini";
 import { computeRunStats, parseRunHistory } from "@/lib/run-history";
+import { parseRetryAttempts } from "@/lib/retry-parser";
 import type { DiagnosisResult, Framework } from "@/lib/types";
 
 const VALID_FRAMEWORKS: Framework[] = ["playwright-ts", "playwright-js", "selenium-java"];
@@ -32,14 +33,25 @@ export async function POST(req: Request) {
     return badRequest(`framework must be one of: ${VALID_FRAMEWORKS.join(", ")}`);
   }
 
-  const outcomes = parseRunHistory(runHistoryText);
+  // Try the manual "Run #101 → PASS" format first; if that comes up short, the pasted text
+  // might be a raw CI log with inline retry attempts instead — same specific-parser-then-
+  // generic-fallback convention as parseFailures() in log-parser.ts.
+  let outcomes = parseRunHistory(runHistoryText);
+  let source: "manual" | "retry-log" = "manual";
+  if (outcomes.length < 2) {
+    const retryOutcomes = parseRetryAttempts(runHistoryText);
+    if (retryOutcomes.length >= 2) {
+      outcomes = retryOutcomes;
+      source = "retry-log";
+    }
+  }
   if (outcomes.length < 2) {
     return badRequest(
-      'Couldn\'t find at least 2 run outcomes (PASS/FAIL) in that history. Paste one run per line, e.g. "Run #101 → PASS".'
+      'Couldn\'t find at least 2 run/attempt outcomes in that text. Paste one run per line (e.g. "Run #101 → PASS") or a raw CI log with retry attempts (e.g. "Attempt 1: TimeoutError...", "Attempt 2: passed").'
     );
   }
 
-  const stats = computeRunStats(outcomes);
+  const stats = computeRunStats(outcomes, source);
   const fw = framework as Framework;
 
   try {

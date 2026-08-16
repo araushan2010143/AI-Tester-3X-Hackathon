@@ -15,10 +15,12 @@ export function FlakyStatsPanel({ stats }: { stats: RunHistoryStats }) {
       <CardContent className="space-y-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Computed from run history — not AI-guessed
+            {stats.source === "retry-log"
+              ? `Detected ${stats.totalRuns} retry attempts directly from your CI log — not AI-guessed`
+              : "Computed from run history — not AI-guessed"}
           </p>
           <h2 className="text-lg font-semibold">
-            {stats.failedRuns} of {stats.totalRuns} runs failed
+            {stats.failedRuns} of {stats.totalRuns} {stats.source === "retry-log" ? "attempts" : "runs"} failed
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">

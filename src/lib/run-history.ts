@@ -1,7 +1,7 @@
 import type { RunHistoryStats, RunOutcome, RunPattern, RunStatus } from "./types";
 
-const PASS_RE = /\b(passed|pass|success(?:ful)?|ok)\b|✓|✔/i;
-const FAIL_RE = /\b(failed|fail|error|broken)\b|✗|✖|❌/i;
+export const PASS_RE = /\b(passed|pass|success(?:ful)?|ok)\b|✓|✔/i;
+export const FAIL_RE = /\b(failed|fail|error|broken)\b|✗|✖|❌/i;
 /** Leading run identifier: "Run #101", "Build 42", "#101", or a bare "101" at line start. */
 const LABEL_RE = /^\s*(?:run|build)?\s*#?(\d+)/i;
 
@@ -57,7 +57,10 @@ function detectPattern(outcomes: RunOutcome[], failedRuns: number, totalRuns: nu
 }
 
 /** Pure, deterministic — the failure rate and pattern are computed here, not guessed by the AI. */
-export function computeRunStats(outcomes: RunOutcome[]): RunHistoryStats {
+export function computeRunStats(
+  outcomes: RunOutcome[],
+  source: RunHistoryStats["source"] = "manual"
+): RunHistoryStats {
   const totalRuns = outcomes.length;
   const failedRuns = outcomes.filter((o) => o.status === "fail").length;
   const failureRate = totalRuns > 0 ? Math.round((failedRuns / totalRuns) * 100) : 0;
@@ -80,5 +83,6 @@ export function computeRunStats(outcomes: RunOutcome[]): RunHistoryStats {
     longestFailStreak,
     pattern: detectPattern(outcomes, failedRuns, totalRuns),
     outcomes,
+    source,
   };
 }

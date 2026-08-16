@@ -125,6 +125,8 @@ export interface RunHistoryStats {
   longestFailStreak: number;
   pattern: RunPattern;
   outcomes: RunOutcome[];
+  /** manual: typed as "Run #101 → PASS" lines. retry-log: auto-detected from a raw CI log's Attempt/Retry blocks. */
+  source: "manual" | "retry-log";
 }
 
 export interface FlakyDiagnoseRequest {
