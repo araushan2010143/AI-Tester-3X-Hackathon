@@ -8,8 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { AppSidebar } from "@/components/app-sidebar";
 import { CodeEditor } from "@/components/code-editor";
 import { FrameworkSelector } from "@/components/framework-selector";
 import { ScreenshotUpload } from "@/components/screenshot-upload";
@@ -447,57 +447,51 @@ export default function Home() {
     toast.error("That entry is no longer in history.");
   }
 
+  const SECTION_TITLE: Record<typeof mode, string> = {
+    single: "Investigate",
+    bulk: "CI Failures",
+    flaky: "Flaky Tests",
+    dashboard: "Overview",
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-xl">
-            🩺
-          </span>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">TraceFix AI</h1>
-            <p className="text-sm text-muted-foreground">
-              From CI failure to production-ready fix in seconds
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="flex h-screen w-full overflow-hidden">
+      <AppSidebar mode={mode} onModeChange={handleModeChange} />
+
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+          <header className="flex flex-wrap items-center justify-between gap-4">
+            <h1 className="text-xl font-bold tracking-tight">{SECTION_TITLE[mode]}</h1>
+            <div className="flex items-center gap-2">
+              {mode === "single" && (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleLoadDemo}>
+                    <Sparkles className="h-4 w-4" />
+                    Load Demo
+                  </Button>
+                  <HistoryPanel onSelect={handleSelectHistory} />
+                </>
+              )}
+              {mode === "bulk" && (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleLoadBulkDemo}>
+                    <Sparkles className="h-4 w-4" />
+                    Load Demo Log
+                  </Button>
+                  <BulkHistoryPanel onSelect={handleSelectBulkHistory} />
+                </>
+              )}
+              {mode === "flaky" && (
+                <Button variant="outline" size="sm" onClick={handleLoadFlakyDemo}>
+                  <Sparkles className="h-4 w-4" />
+                  Load Demo History
+                </Button>
+              )}
+            </div>
+          </header>
+
           {mode === "single" && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleLoadDemo}>
-                <Sparkles className="h-4 w-4" />
-                Load Demo
-              </Button>
-              <HistoryPanel onSelect={handleSelectHistory} />
-            </>
-          )}
-          {mode === "bulk" && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleLoadBulkDemo}>
-                <Sparkles className="h-4 w-4" />
-                Load Demo Log
-              </Button>
-              <BulkHistoryPanel onSelect={handleSelectBulkHistory} />
-            </>
-          )}
-          {mode === "flaky" && (
-            <Button variant="outline" size="sm" onClick={handleLoadFlakyDemo}>
-              <Sparkles className="h-4 w-4" />
-              Load Demo History
-            </Button>
-          )}
-        </div>
-      </header>
-
-      <Tabs value={mode} onValueChange={handleModeChange}>
-        <TabsList>
-          <TabsTrigger value="single">Single Test</TabsTrigger>
-          <TabsTrigger value="bulk">Bulk Log (Jenkins)</TabsTrigger>
-          <TabsTrigger value="flaky">Flaky Test</TabsTrigger>
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="single" className="flex flex-col gap-8 pt-6">
+            <div className="flex flex-col gap-8">
           <Card>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
@@ -646,9 +640,11 @@ export default function Home() {
 
             {!loading && !result && <EmptyState />}
           </section>
-        </TabsContent>
+            </div>
+          )}
 
-        <TabsContent value="bulk" className="flex flex-col gap-8 pt-6">
+          {mode === "bulk" && (
+            <div className="flex flex-col gap-8">
           <Card>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
@@ -717,9 +713,11 @@ export default function Home() {
               />
             )}
           </section>
-        </TabsContent>
+            </div>
+          )}
 
-        <TabsContent value="flaky" className="flex flex-col gap-8 pt-6">
+          {mode === "flaky" && (
+            <div className="flex flex-col gap-8">
           <Card>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
@@ -819,14 +817,14 @@ export default function Home() {
               />
             )}
           </section>
-        </TabsContent>
+            </div>
+          )}
 
-        <TabsContent value="dashboard" className="pt-6">
-          {dashboardStats && (
+          {mode === "dashboard" && dashboardStats && (
             <DashboardView stats={dashboardStats} onClearAll={handleClearAllHistory} onSelectActivity={handleSelectActivity} />
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </main>
     </div>
   );
 }
