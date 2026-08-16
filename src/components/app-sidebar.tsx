@@ -24,12 +24,12 @@ const NAV_ITEMS: NavItem[] = [
 export function AppSidebar({ mode, onModeChange }: { mode: AppMode; onModeChange: (mode: AppMode) => void }) {
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-xl">
+      <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-6">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-3xl shadow-[0_0_16px_rgba(79,140,255,0.3)]">
           🩺
         </span>
         <div className="min-w-0">
-          <p className="truncate text-base font-bold tracking-tight">TraceFix AI</p>
+          <p className="truncate text-lg leading-tight font-bold tracking-tight">TraceFix AI</p>
           <p className="truncate text-[11px] text-muted-foreground">CI failure → root cause → fix</p>
         </div>
       </div>
