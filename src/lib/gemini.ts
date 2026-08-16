@@ -25,6 +25,13 @@ const diagnosisSchema: Schema = {
       type: SchemaType.NUMBER,
       description: "Confidence in this diagnosis, 0-100.",
     },
+    risk: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["low", "medium", "high"],
+      description:
+        "How risky it would be to apply the fix and move on without further investigation. low = safe to apply directly (e.g. a clean locator swap). medium = fix is reasonable but a human should verify. high = do not blindly apply — this may be masking a real application bug or needs deeper investigation.",
+    },
     rootCause: {
       type: SchemaType.STRING,
       description: "One to three sentence explanation of why the test actually failed.",
@@ -45,16 +52,31 @@ const diagnosisSchema: Schema = {
       required: ["before", "after", "explanation"],
     },
   },
-  required: ["failureType", "confidence", "rootCause", "evidence", "fix"],
+  required: ["failureType", "confidence", "risk", "rootCause", "evidence", "fix"],
 };
+
+const CATEGORY_GUIDANCE = `- locator_breakage: a selector no longer resolves, or resolves to the wrong/multiple elements, purely because of a DOM/attribute change.
+- timing_race_condition: the element/data exists eventually but the test acted before it was ready — timeouts, animations, async rendering, race conditions.
+- assertion_failure: the test correctly found everything and got a real value back, but expected != actual (a genuine behavioral mismatch, not a locator or timing problem).
+- network_api_failure: an HTTP call the test depends on failed or errored (timeout, 5xx, connection refused, DNS) — the failure is in a network/API call, not the UI.
+- environment_issue: the target service/environment itself was unavailable or misbehaving (e.g. "QA service unavailable", runner/infrastructure failure) — distinct from a single API call failing.
+- configuration_issue: wrong environment variable, base URL, CI workflow/job config, or similar setup mismatch — the test itself is fine, its configuration is wrong.
+- authentication_issue: 401/403, expired/invalid session or token, login/SSO/MFA failure, missing cookie — an auth problem, not a locator or app bug.
+- test_data_issue: required test data doesn't exist, already exists, is expired, or is otherwise wrong for this run (e.g. "order not found", "user already exists").
+- dependency_issue: build/dependency/compilation failure (npm/Maven/Gradle resolution, "cannot find symbol", ClassNotFoundException, version conflicts) — tests never actually executed.
+- browser_issue: browser/driver crashed, session or context invalid, or a browser/driver version mismatch (e.g. SessionNotCreatedException, "Executable doesn't exist").
+- flaky_test: the failure looks like a non-deterministic, hard-to-reproduce issue rather than a consistent one — only pick this when the evidence itself suggests non-determinism, not as a default guess.
+- application_bug: everything about the test and environment looks correct, and the evidence points to the application itself behaving wrong.`;
 
 function buildDiagnosisPrompt(req: DiagnoseRequest): string {
   return `You are a senior QA automation engineer acting as a debugging assistant. A test written in ${FRAMEWORK_LABELS[req.framework]} failed in CI. Diagnose the *real* root cause and produce a robust fix.
 
 Rules:
 - Ground every piece of evidence in specific details actually present in the inputs below (selector strings, error messages, line numbers, DOM attributes). Never state a generic guess like "the locator is probably broken" without pointing to the exact selector/attribute/error text that proves it.
-- Pick exactly one failureType that best fits: ${FAILURE_TYPE_VALUES.join(", ")}.
+- Pick exactly one failureType — use the sharpest fitting category, not the closest generic one:
+${CATEGORY_GUIDANCE}
 - confidence is 0-100 and should reflect how strong the evidence actually is, not a flat default.
+- risk reflects how safe it is to apply the fix and move on: low for a clean, mechanical fix (e.g. a locator swap); high whenever the evidence could instead mean a real application bug or something needing a human to dig further — do not default to low.
 - The fix must be idiomatic, resilient, production-ready code in the same framework/language as the test (prefer accessible/semantic locators over brittle CSS/XPath for UI frameworks, proper explicit waits over sleeps, etc.).
 - "before" should be the specific broken snippet from the test code, not the whole file.
 
@@ -82,8 +104,10 @@ function buildBulkDiagnosisPrompt(cluster: FailureCluster, framework: Framework)
 
 Rules:
 - Ground every piece of evidence in specific details actually present in the log snippet below (selector strings, error messages, class names, identifiers). Never state a generic guess.
-- Pick exactly one failureType that best fits: ${FAILURE_TYPE_VALUES.join(", ")}.
+- Pick exactly one failureType — use the sharpest fitting category, not the closest generic one:
+${CATEGORY_GUIDANCE}
 - confidence is 0-100 and should reflect how strong the evidence actually is — since this is inferred from a log snippet without the full test source, be honest if that caps how certain you can be.
+- risk reflects how safe it is to apply the fix to all ${cluster.memberCount} tests in this cluster and move on: low for a clean, mechanical fix; high whenever the evidence could instead mean a real application bug or something needing a human to dig further.
 - Since you don't have the original file, "before" should be your best reconstruction of the specific broken line implied by the log (e.g. the selector/call visible in the stack trace), and "after" should be an idiomatic, resilient replacement pattern in ${FRAMEWORK_LABELS[framework]} — a pattern the engineer can adapt, not a guaranteed drop-in.
 - This diagnosis will be applied to all ${cluster.memberCount} tests in this cluster, so phrase the root cause and fix generally enough to cover the pattern, not just one specific test name.
 

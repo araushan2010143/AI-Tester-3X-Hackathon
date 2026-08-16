@@ -3,8 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { EvidenceList } from "@/components/evidence-list";
 import { BeforeAfterDiff } from "@/components/before-after-diff";
-import { FAILURE_TYPE_META, confidenceClassName } from "@/components/failure-meta";
-import { FAILURE_TYPE_LABELS, type DiagnosisResult } from "@/lib/types";
+import { FAILURE_TYPE_META, confidenceClassName, riskClassName } from "@/components/failure-meta";
+import { FAILURE_TYPE_LABELS, RISK_LEVEL_LABELS, type DiagnosisResult } from "@/lib/types";
 
 interface DiagnosisPanelProps {
   result: DiagnosisResult;
@@ -26,9 +26,14 @@ export function DiagnosisPanel({ result }: DiagnosisPanelProps) {
             <h2 className="text-lg font-semibold">{FAILURE_TYPE_LABELS[result.failureType]}</h2>
           </div>
         </div>
-        <Badge className={`text-sm font-medium ${confidenceClassName(result.confidence)}`} variant="secondary">
-          {result.confidence}% Confidence
-        </Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge className={`text-sm font-medium ${confidenceClassName(result.confidence)}`} variant="secondary">
+            {result.confidence}% Confidence
+          </Badge>
+          <Badge className={`text-xs font-medium ${riskClassName(result.risk)}`} variant="secondary">
+            {RISK_LEVEL_LABELS[result.risk]}
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <div>

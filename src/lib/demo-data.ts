@@ -38,6 +38,7 @@ export const DEMO_RESULT: DiagnosisResult = {
   framework: "playwright-ts",
   failureType: "locator_breakage",
   confidence: 92,
+  risk: "low",
   rootCause:
     "The test targets button.btn-debug by CSS class, but a decorative header-overlay div (z-20) sits on top of the button (z-10) and intercepts pointer events, so Playwright times out on the click. The button already exposes a stable accessible name that isn't affected by the overlay or future CSS changes.",
   evidence: [
@@ -84,6 +85,7 @@ export const DEMO_RESULT_SELENIUM: DiagnosisResult = {
   framework: "selenium-java",
   failureType: "locator_breakage",
   confidence: 90,
+  risk: "low",
   rootCause:
     "The test locates the button by its position among header siblings (button[3]), but a recent header redesign (class redesigned-v2) added a notifications button before it, shifting the debug button out of the 3rd slot entirely — the XPath now matches nothing, hence NoSuchElementException rather than a click failure.",
   evidence: [

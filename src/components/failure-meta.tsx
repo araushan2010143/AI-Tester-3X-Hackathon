@@ -4,11 +4,16 @@ import {
   XCircle,
   WifiOff,
   Server,
+  SlidersHorizontal,
+  KeyRound,
+  Database,
+  Package,
+  MonitorX,
   Shuffle,
   Bug,
   type LucideIcon,
 } from "lucide-react";
-import type { FailureType } from "@/lib/types";
+import type { FailureType, RiskLevel } from "@/lib/types";
 
 interface FailureMeta {
   icon: LucideIcon;
@@ -37,6 +42,26 @@ export const FAILURE_TYPE_META: Record<FailureType, FailureMeta> = {
     icon: Server,
     className: "text-purple-500 bg-purple-500/10",
   },
+  configuration_issue: {
+    icon: SlidersHorizontal,
+    className: "text-sky-500 bg-sky-500/10",
+  },
+  authentication_issue: {
+    icon: KeyRound,
+    className: "text-indigo-500 bg-indigo-500/10",
+  },
+  test_data_issue: {
+    icon: Database,
+    className: "text-cyan-500 bg-cyan-500/10",
+  },
+  dependency_issue: {
+    icon: Package,
+    className: "text-lime-500 bg-lime-500/10",
+  },
+  browser_issue: {
+    icon: MonitorX,
+    className: "text-fuchsia-500 bg-fuchsia-500/10",
+  },
   flaky_test: {
     icon: Shuffle,
     className: "text-yellow-500 bg-yellow-500/10",
@@ -51,4 +76,14 @@ export function confidenceClassName(confidence: number): string {
   if (confidence >= 80) return "text-emerald-500 bg-emerald-500/10";
   if (confidence >= 50) return "text-amber-500 bg-amber-500/10";
   return "text-red-500 bg-red-500/10";
+}
+
+const RISK_CLASSNAMES: Record<RiskLevel, string> = {
+  low: "text-emerald-500 bg-emerald-500/10",
+  medium: "text-amber-500 bg-amber-500/10",
+  high: "text-red-500 bg-red-500/10",
+};
+
+export function riskClassName(risk: RiskLevel): string {
+  return RISK_CLASSNAMES[risk];
 }
