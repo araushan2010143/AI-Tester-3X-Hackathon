@@ -5,13 +5,23 @@ import { EvidenceList } from "@/components/evidence-list";
 import { BeforeAfterDiff } from "@/components/before-after-diff";
 import { SignalsAnalyzed, type DiagnosisSignals } from "@/components/signals-analyzed";
 import { FAILURE_TYPE_META, FRAMEWORK_BADGE_PARTS, confidenceClassName, riskClassName } from "@/components/failure-meta";
-import { FAILURE_TYPE_LABELS, RISK_LEVEL_LABELS, type DiagnosisResult } from "@/lib/types";
+import { FAILURE_TYPE_LABELS, RISK_LEVEL_LABELS, type DiagnosisResult, type LLMProvider } from "@/lib/types";
+
+const LLM_PROVIDER_LABELS: Record<LLMProvider, string> = {
+  gemini: "Gemini",
+  openai: "OpenAI",
+  groq: "Groq",
+};
 
 interface DiagnosisPanelProps {
   result: DiagnosisResult;
   /** Which optional evidence fields were actually present on the request that produced this
    *  result. Only Single Test wires this — Bulk/Flaky panels simply omit it. */
   signals?: DiagnosisSignals;
+  /** Which AI provider actually produced this diagnosis — Gemini is primary; OpenAI/Groq only
+   *  show up here when Gemini was unavailable and the request failed over. Omitted for
+   *  history entries saved before this existed, since we honestly don't know for those. */
+  llmProvider?: LLMProvider;
 }
 
 function confidenceBarColor(confidence: number): string {
@@ -20,7 +30,7 @@ function confidenceBarColor(confidence: number): string {
   return "bg-red-500";
 }
 
-export function DiagnosisPanel({ result, signals }: DiagnosisPanelProps) {
+export function DiagnosisPanel({ result, signals, llmProvider }: DiagnosisPanelProps) {
   const meta = FAILURE_TYPE_META[result.failureType];
   const Icon = meta.icon;
   const [fwName, fwVariant] = FRAMEWORK_BADGE_PARTS[result.framework];
@@ -52,6 +62,7 @@ export function DiagnosisPanel({ result, signals }: DiagnosisPanelProps) {
           <Badge className={`text-xs font-medium ${riskClassName(result.risk)}`} variant="secondary">
             {RISK_LEVEL_LABELS[result.risk]}
           </Badge>
+          {llmProvider && <p className="text-[10px] text-muted-foreground">via {LLM_PROVIDER_LABELS[llmProvider]}</p>}
         </div>
       </CardHeader>
       <CardContent className="space-y-6">

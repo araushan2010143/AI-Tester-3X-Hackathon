@@ -106,6 +106,10 @@ export interface FailureCluster {
 /** Which CI system's log format was detected, purely for an honest "here's what we saw" label. */
 export type CiProvider = "github-actions" | "jenkins" | "unknown";
 
+/** Which AI provider actually produced a given diagnosis — Gemini is primary; OpenAI/Groq only
+ *  fire when it's unavailable (see lib/llm-router.ts). Not to be confused with CiProvider above. */
+export type LLMProvider = "gemini" | "openai" | "groq";
+
 /** A concrete identifier (id/email/UUID) that shows up in 2+ *different* tests' failures —
  *  computed evidence for a possible shared-test-data / parallel-execution collision. */
 export interface SharedIdentifierGroup {
@@ -122,7 +126,7 @@ export type BulkStreamEvent =
       ciProvider?: CiProvider;
       sharedIdentifiers?: SharedIdentifierGroup[];
     }
-  | { type: "cluster"; cluster: FailureCluster; diagnosis: DiagnosisResult }
+  | { type: "cluster"; cluster: FailureCluster; diagnosis: DiagnosisResult; llmProvider: LLMProvider }
   | { type: "cluster-error"; cluster: FailureCluster; error: string }
   | { type: "skipped-cluster"; cluster: FailureCluster }
   | { type: "done"; clustersOk: number; clustersFailed: number; clustersSkipped: number }

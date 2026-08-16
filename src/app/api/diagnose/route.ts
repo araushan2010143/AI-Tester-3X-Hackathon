@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { diagnoseFailure, GeminiNotConfiguredError, GeminiOverloadedError } from "@/lib/gemini";
+import { diagnoseFailure, GeminiNotConfiguredError, GeminiOverloadedError, AllProvidersUnavailableError } from "@/lib/diagnose";
 import { fetchPrDiff, parsePrReference, GitHubNotConfiguredError, GitHubNotFoundError, GitHubRateLimitError, type PrDiff } from "@/lib/github";
 import type { DiagnoseRequest, DiagnosisResult, Framework } from "@/lib/types";
 
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const diagnosis = await diagnoseFailure(
+    const { result: diagnosis, provider } = await diagnoseFailure(
       {
         testCode,
         ciLog,
@@ -86,6 +86,7 @@ export async function POST(req: Request) {
     const result: DiagnosisResult = { ...diagnosis, framework: framework as Framework };
     return NextResponse.json({
       result,
+      llmProvider: provider,
       prInfo: prRef && prDiff ? { ...prRef, title: prDiff.title, filesChanged: prDiff.filesChanged, truncated: prDiff.truncated } : undefined,
     });
   } catch (err) {
@@ -95,10 +96,10 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-    if (err instanceof GeminiOverloadedError) {
-      console.warn("Diagnose route: Gemini overloaded after retries.");
+    if (err instanceof GeminiOverloadedError || err instanceof AllProvidersUnavailableError) {
+      console.warn("Diagnose route: all configured providers exhausted.", err);
       return NextResponse.json(
-        { error: "Gemini is busy right now (high demand on Google's side). Wait a few seconds and hit Diagnose & Fix again." },
+        { error: "The AI is busy right now (high demand). Wait a few seconds and hit Diagnose & Fix again." },
         { status: 503 }
       );
     }

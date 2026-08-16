@@ -86,7 +86,7 @@ export function ClusterRow({
           />
         </AccordionTrigger>
         <AccordionContent>
-          <DiagnosisPanel result={diagnosis} />
+          <DiagnosisPanel result={diagnosis} llmProvider={state.llmProvider} />
         </AccordionContent>
       </AccordionItem>
     );

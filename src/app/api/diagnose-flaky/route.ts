@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { diagnoseFlakiness, GeminiNotConfiguredError, GeminiOverloadedError } from "@/lib/gemini";
+import { diagnoseFlakiness, GeminiNotConfiguredError, GeminiOverloadedError, AllProvidersUnavailableError } from "@/lib/diagnose";
 import { computeRunStats, parseRunHistory } from "@/lib/run-history";
 import { parseRetryAttempts } from "@/lib/retry-parser";
 import type { DiagnosisResult, Framework } from "@/lib/types";
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   const fw = framework as Framework;
 
   try {
-    const diagnosis = await diagnoseFlakiness(stats, {
+    const { result: diagnosis, provider } = await diagnoseFlakiness(stats, {
       runHistoryText,
       testName: typeof testName === "string" ? testName : undefined,
       testCode: typeof testCode === "string" ? testCode : undefined,
@@ -64,9 +64,9 @@ export async function POST(req: Request) {
     });
 
     const result: DiagnosisResult = { ...diagnosis, framework: fw };
-    return NextResponse.json({ stats, diagnosis: result });
+    return NextResponse.json({ stats, diagnosis: result, llmProvider: provider });
   } catch (err) {
-    // Stats are computed locally and don't depend on Gemini — return them even
+    // Stats are computed locally and don't depend on the AI provider — return them even
     // when the AI explanation fails, so the client can still show real numbers.
     if (err instanceof GeminiNotConfiguredError) {
       return NextResponse.json(
@@ -74,9 +74,9 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-    if (err instanceof GeminiOverloadedError) {
+    if (err instanceof GeminiOverloadedError || err instanceof AllProvidersUnavailableError) {
       return NextResponse.json(
-        { error: "Gemini is busy right now (high demand on Google's side). Wait a few seconds and try again.", stats },
+        { error: "The AI is busy right now (high demand). Wait a few seconds and try again.", stats },
         { status: 503 }
       );
     }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { diagnoseCluster, GeminiOverloadedError } from "@/lib/gemini";
+import { diagnoseCluster, GeminiOverloadedError, AllProvidersUnavailableError } from "@/lib/diagnose";
 import { parseFailures, detectCiProvider, MAX_LOG_CHARS } from "@/lib/log-parser";
 import { clusterFailures } from "@/lib/failure-clustering";
 import { detectSharedIdentifiers } from "@/lib/shared-data-detector";
@@ -15,7 +15,7 @@ function badRequest(message: string) {
 }
 
 function clusterErrorMessage(err: unknown): string {
-  if (err instanceof GeminiOverloadedError) return err.message;
+  if (err instanceof GeminiOverloadedError || err instanceof AllProvidersUnavailableError) return err.message;
   if (err instanceof Error) return err.message;
   return "Diagnosis failed for this cluster.";
 }
@@ -39,9 +39,9 @@ export async function POST(req: Request) {
   if (!framework || !VALID_FRAMEWORKS.includes(framework as Framework)) {
     return badRequest(`framework must be one of: ${VALID_FRAMEWORKS.join(", ")}`);
   }
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY && !process.env.GROQ_API_KEY) {
     return NextResponse.json(
-      { error: "GEMINI_API_KEY is not set. Add it to .env.local and restart the dev server." },
+      { error: "No AI provider is configured. Add GEMINI_API_KEY (or OPENAI_API_KEY/GROQ_API_KEY) to .env.local and restart the dev server." },
       { status: 500 }
     );
   }
@@ -94,8 +94,8 @@ export async function POST(req: Request) {
             send({ type: "cluster-error", cluster: settled.item, error: clusterErrorMessage(settled.error) });
           } else {
             clustersOk++;
-            const diagnosis: DiagnosisResult = { ...settled.result, framework: fw };
-            send({ type: "cluster", cluster: settled.item, diagnosis });
+            const diagnosis: DiagnosisResult = { ...settled.result.result, framework: fw };
+            send({ type: "cluster", cluster: settled.item, diagnosis, llmProvider: settled.result.provider });
           }
         }
 

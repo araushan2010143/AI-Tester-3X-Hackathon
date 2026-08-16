@@ -30,7 +30,7 @@ import { findSimilarDiagnoses } from "@/lib/similar-diagnoses";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOGS } from "@/lib/demo-bulk-log";
 import { DEMO_FLAKY_RUNS } from "@/lib/demo-flaky-run";
-import { FRAMEWORK_LABELS, type CiProvider, type DashboardActivityItem, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type FlakyHistoryEntry, type PrInfo, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
+import { FRAMEWORK_LABELS, type CiProvider, type DashboardActivityItem, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type FlakyHistoryEntry, type LLMProvider, type PrInfo, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
@@ -73,6 +73,7 @@ export default function Home() {
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [resultSignals, setResultSignals] = useState<DiagnosisSignals | null>(null);
+  const [resultProvider, setResultProvider] = useState<LLMProvider | null>(null);
   const [similarDiagnoses, setSimilarDiagnoses] = useState<SimilarDiagnosis[]>([]);
   const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -118,6 +119,7 @@ export default function Home() {
       const priorHistory = getHistory();
       setResult(diagnosis);
       setResultSignals(computeSignals(request, !!screenshotDataUrl, !!resolvedPrInfo));
+      setResultProvider((data.llmProvider as LLMProvider | undefined) ?? null);
       setPrInfo(resolvedPrInfo);
       addHistoryEntry(request, diagnosis);
       setSimilarDiagnoses(findSimilarDiagnoses(diagnosis, priorHistory));
@@ -140,6 +142,7 @@ export default function Home() {
     setScreenshotDataUrl(null);
     setResult(demo.result);
     setResultSignals(computeSignals(demo.request, false, false));
+    setResultProvider(null);
     setSimilarDiagnoses([]);
     setPrInfo(null);
     toast.success("Demo example loaded — no API key needed to view this result.");
@@ -161,6 +164,7 @@ export default function Home() {
       setScreenshotDataUrl(null);
       setResult(null);
       setResultSignals(null);
+      setResultProvider(null);
       setSimilarDiagnoses([]);
       setPrInfo(null);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
@@ -180,6 +184,7 @@ export default function Home() {
     setScreenshotDataUrl(null);
     setResult(entry.result);
     setResultSignals(computeSignals(entry.request, false, false));
+    setResultProvider(null);
     setSimilarDiagnoses([]);
     setPrInfo(null);
   }
@@ -187,6 +192,7 @@ export default function Home() {
   function handleAnalyzeAgain() {
     setResult(null);
     setResultSignals(null);
+    setResultProvider(null);
     setTestCode("");
     setCiLog("");
     setDomSnippet("");
@@ -313,7 +319,7 @@ export default function Home() {
               toast.error("No failures matched this framework's log format. Check the log or try the other framework.");
             }
           } else if (event.type === "cluster") {
-            const row: ClusterRowState = { cluster: event.cluster, status: "ok", diagnosis: event.diagnosis };
+            const row: ClusterRowState = { cluster: event.cluster, status: "ok", diagnosis: event.diagnosis, llmProvider: event.llmProvider };
             collectedRows = [...collectedRows, row];
             setBulkRows((prev) => [...prev, row]);
           } else if (event.type === "cluster-error") {
@@ -353,6 +359,7 @@ export default function Home() {
   const [flakyFailureLog, setFlakyFailureLog] = useState("");
   const [flakyStats, setFlakyStats] = useState<RunHistoryStats | null>(null);
   const [flakyResult, setFlakyResult] = useState<DiagnosisResult | null>(null);
+  const [flakyProvider, setFlakyProvider] = useState<LLMProvider | null>(null);
   const [flakyLoading, setFlakyLoading] = useState(false);
 
   const canAnalyzeFlaky = runHistoryText.trim().length > 0 && !flakyLoading;
@@ -365,6 +372,7 @@ export default function Home() {
     setFlakyFailureLog(demo.failureLog);
     setFlakyStats(null);
     setFlakyResult(null);
+    setFlakyProvider(null);
     toast.success("Demo run history loaded — hit Analyze Flakiness to run the real diagnosis.");
   }
 
@@ -381,6 +389,7 @@ export default function Home() {
       setFlakyFailureLog("");
       setFlakyStats(null);
       setFlakyResult(null);
+      setFlakyProvider(null);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
     }
   }
@@ -394,11 +403,13 @@ export default function Home() {
     setFlakyFailureLog("");
     setFlakyStats(entry.stats);
     setFlakyResult(entry.result);
+    setFlakyProvider(null);
   }
 
   function handleFlakyAnalyzeAgain() {
     setFlakyStats(null);
     setFlakyResult(null);
+    setFlakyProvider(null);
     setTestName("");
     setRunHistoryText("");
     setFlakyTestCode("");
@@ -414,6 +425,7 @@ export default function Home() {
     setFlakyLoading(true);
     setFlakyStats(null);
     setFlakyResult(null);
+    setFlakyProvider(null);
 
     try {
       const res = await fetch("/api/diagnose-flaky", {
@@ -438,6 +450,7 @@ export default function Home() {
 
       const diagnosis = data.diagnosis as DiagnosisResult;
       setFlakyResult(diagnosis);
+      setFlakyProvider((data.llmProvider as LLMProvider | undefined) ?? null);
       addFlakyHistoryEntry(flakyFramework, testName.trim() || undefined, data.stats as RunHistoryStats, diagnosis);
     } catch {
       toast.error("Couldn't reach the diagnose API. Check your connection and try again.");
@@ -671,7 +684,7 @@ export default function Home() {
                   </p>
                 )}
                 <SimilarDiagnoses items={similarDiagnoses} />
-                <DiagnosisPanel result={result} signals={resultSignals ?? undefined} />
+                <DiagnosisPanel result={result} signals={resultSignals ?? undefined} llmProvider={resultProvider ?? undefined} />
                 <div className="flex justify-center">
                   <Button variant="ghost" onClick={handleAnalyzeAgain}>
                     <RotateCcw className="h-4 w-4" />
@@ -844,7 +857,7 @@ export default function Home() {
 
             {!flakyLoading && flakyResult && (
               <>
-                <DiagnosisPanel result={flakyResult} />
+                <DiagnosisPanel result={flakyResult} llmProvider={flakyProvider ?? undefined} />
                 <div className="flex justify-center">
                   <Button variant="ghost" onClick={handleFlakyAnalyzeAgain}>
                     <RotateCcw className="h-4 w-4" />
