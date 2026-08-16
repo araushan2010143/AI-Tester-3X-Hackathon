@@ -76,7 +76,7 @@ export function BulkResults({
         {sharedIdentifiers && sharedIdentifiers.length > 0 && <SharedDataWarning groups={sharedIdentifiers} />}
 
         {primary && primary.status === "ok" && PrimaryIcon && (
-          <div className={`rounded-lg border-2 p-4 ${primaryMeta!.className.includes("red") ? "border-red-500/30" : "border-primary/20"}`}>
+          <div className={`rounded-lg border-2 bg-accent/40 p-5 ${primaryMeta!.className.includes("red") ? "border-red-500/30" : "border-primary/20"}`}>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-primary">Primary Root Cause</p>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-3">
