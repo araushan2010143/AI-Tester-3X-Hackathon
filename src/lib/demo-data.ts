@@ -1,4 +1,4 @@
-import type { DiagnoseRequest, DiagnosisResult } from "./types";
+import type { DiagnoseRequest, DiagnosisResult, Framework } from "./types";
 
 /**
  * Canned example matching the "btn-debug -> getByRole" walkthrough from the product spec.
@@ -52,4 +52,60 @@ export const DEMO_RESULT: DiagnosisResult = {
     explanation:
       "getByRole targets the button by its accessible name instead of an implementation-detail CSS class, and Playwright's actionability checks will correctly wait out transient overlays rather than failing once fixed on the app side — but more importantly this locator survives future class/z-index churn entirely.",
   },
+};
+
+/** Selenium/Java equivalent example — a positional XPath broken by a UI reorder. */
+export const DEMO_REQUEST_SELENIUM: DiagnoseRequest = {
+  framework: "selenium-java",
+  testCode: `@Test
+public void opensDebugInfoPanel() {
+  driver.get("https://app.example.com/dashboard");
+  WebElement debugButton = driver.findElement(By.xpath("//div[@class='header']/button[3]"));
+  debugButton.click();
+  WebElement panel = driver.findElement(By.className("debug-panel"));
+  Assert.assertTrue(panel.isDisplayed());
+}`,
+  ciLog: `org.openqa.selenium.NoSuchElementException: no such element: Unable to locate element:
+{"method":"xpath","selector":"//div[@class='header']/button[3]"}
+  (Session info: chrome=124.0.6367.91)
+Build info: version: '4.19.1', revision: 'a72a655060'
+System info: os.name: 'Linux', os.arch: 'amd64'
+Driver info: org.openqa.selenium.chrome.ChromeDriver
+
+	at DashboardTests.opensDebugInfoPanel(DashboardTests.java:42)`,
+  domSnippet: `<div class="header redesigned-v2">
+  <button id="nav-search">...</button>
+  <button id="nav-notifications">...</button>
+  <button id="debug-info-btn" data-testid="debug-info-trigger">Debug Info</button>
+</div>`,
+};
+
+export const DEMO_RESULT_SELENIUM: DiagnosisResult = {
+  framework: "selenium-java",
+  failureType: "locator_breakage",
+  confidence: 90,
+  rootCause:
+    "The test locates the button by its position among header siblings (button[3]), but a recent header redesign (class redesigned-v2) added a notifications button before it, shifting the debug button out of the 3rd slot entirely — the XPath now matches nothing, hence NoSuchElementException rather than a click failure.",
+  evidence: [
+    "Selector By.xpath(\"//div[@class='header']/button[3]\") depends on sibling position",
+    "CI log shows: NoSuchElementException — the xpath resolves to zero elements, not a stale one",
+    "header class includes redesigned-v2, indicating the header markup changed recently",
+    "DOM snippet shows the button carries a stable id=\"debug-info-btn\" and data-testid=\"debug-info-trigger\"",
+  ],
+  fix: {
+    before: `WebElement debugButton = driver.findElement(By.xpath("//div[@class='header']/button[3]"));
+debugButton.click();`,
+    after: `WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+WebElement debugButton = wait.until(
+    ExpectedConditions.elementToBeClickable(By.cssSelector("[data-testid='debug-info-trigger']"))
+);
+debugButton.click();`,
+    explanation:
+      "Swapping the positional XPath for the stable data-testid selector removes the dependency on sibling order entirely, and wrapping it in an explicit WebDriverWait avoids a race if the button renders slightly after the rest of the header.",
+  },
+};
+
+export const DEMOS: Record<Framework, { request: DiagnoseRequest; result: DiagnosisResult }> = {
+  "playwright-ts": { request: DEMO_REQUEST, result: DEMO_RESULT },
+  "selenium-java": { request: DEMO_REQUEST_SELENIUM, result: DEMO_RESULT_SELENIUM },
 };

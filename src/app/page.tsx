@@ -13,8 +13,8 @@ import { DiagnosisPanel } from "@/components/diagnosis-panel";
 import { EmptyState } from "@/components/empty-state";
 import { HistoryPanel } from "@/components/history-panel";
 import { addHistoryEntry } from "@/lib/history";
-import { DEMO_REQUEST, DEMO_RESULT } from "@/lib/demo-data";
-import type { DiagnoseRequest, DiagnosisResult, Framework, HistoryEntry } from "@/lib/types";
+import { DEMOS } from "@/lib/demo-data";
+import { FRAMEWORK_LABELS, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry } from "@/lib/types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
   "playwright-ts": "typescript",
@@ -70,12 +70,26 @@ export default function Home() {
   }
 
   function handleLoadDemo() {
-    setFramework(DEMO_REQUEST.framework);
-    setTestCode(DEMO_REQUEST.testCode);
-    setCiLog(DEMO_REQUEST.ciLog);
-    setDomSnippet(DEMO_REQUEST.domSnippet ?? "");
-    setResult(DEMO_RESULT);
+    const demo = DEMOS[framework];
+    setTestCode(demo.request.testCode);
+    setCiLog(demo.request.ciLog);
+    setDomSnippet(demo.request.domSnippet ?? "");
+    setResult(demo.result);
     toast.success("Demo example loaded — no API key needed to view this result.");
+  }
+
+  function handleFrameworkChange(next: Framework) {
+    if (next === framework) return;
+
+    const hasContent = testCode.trim() || ciLog.trim() || domSnippet.trim() || result;
+    setFramework(next);
+    if (hasContent) {
+      setTestCode("");
+      setCiLog("");
+      setDomSnippet("");
+      setResult(null);
+      toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
+    }
   }
 
   function handleSelectHistory(entry: HistoryEntry) {
@@ -120,7 +134,7 @@ export default function Home() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm font-medium">Test Framework</label>
-            <FrameworkSelector value={framework} onChange={setFramework} />
+            <FrameworkSelector value={framework} onChange={handleFrameworkChange} />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
