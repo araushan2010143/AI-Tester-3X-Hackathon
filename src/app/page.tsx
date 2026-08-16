@@ -29,7 +29,7 @@ import { findSimilarDiagnoses } from "@/lib/similar-diagnoses";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
 import { DEMO_FLAKY_RUN } from "@/lib/demo-flaky-run";
-import { FRAMEWORK_LABELS, type CiProvider, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type PrInfo, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
+import { FRAMEWORK_LABELS, type CiProvider, type DashboardActivityItem, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type FlakyHistoryEntry, type PrInfo, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
@@ -318,6 +318,17 @@ export default function Home() {
     toast.success("Demo run history loaded — hit Analyze Flakiness to run the real diagnosis.");
   }
 
+  function handleSelectFlakyHistory(entry: FlakyHistoryEntry) {
+    setMode("flaky");
+    setFlakyFramework(entry.framework);
+    setTestName(entry.testName ?? "");
+    setRunHistoryText("");
+    setFlakyTestCode("");
+    setFlakyFailureLog("");
+    setFlakyStats(entry.stats);
+    setFlakyResult(entry.result);
+  }
+
   function handleFlakyAnalyzeAgain() {
     setFlakyStats(null);
     setFlakyResult(null);
@@ -387,6 +398,20 @@ export default function Home() {
     clearFlakyHistory();
     refreshDashboard();
     toast.success("Cleared all history.");
+  }
+
+  function handleSelectActivity(item: DashboardActivityItem) {
+    if (item.kind === "single") {
+      const entry = getHistory().find((e) => e.id === item.id);
+      if (entry) return handleSelectHistory(entry);
+    } else if (item.kind === "bulk") {
+      const entry = getBulkHistory().find((e) => e.id === item.id);
+      if (entry) return handleSelectBulkHistory(entry);
+    } else {
+      const entry = getFlakyHistory().find((e) => e.id === item.id);
+      if (entry) return handleSelectFlakyHistory(entry);
+    }
+    toast.error("That entry is no longer in history.");
   }
 
   return (
@@ -764,7 +789,9 @@ export default function Home() {
         </TabsContent>
 
         <TabsContent value="dashboard" className="pt-6">
-          {dashboardStats && <DashboardView stats={dashboardStats} onClearAll={handleClearAllHistory} />}
+          {dashboardStats && (
+            <DashboardView stats={dashboardStats} onClearAll={handleClearAllHistory} onSelectActivity={handleSelectActivity} />
+          )}
         </TabsContent>
       </Tabs>
     </div>

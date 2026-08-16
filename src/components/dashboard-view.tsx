@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/empty-state";
 import { FailureTypeBreakdown } from "@/components/failure-type-breakdown";
 import { riskClassName } from "@/components/failure-meta";
-import { RISK_LEVEL_LABELS, type DashboardStats, type RiskLevel } from "@/lib/types";
+import { RISK_LEVEL_LABELS, type DashboardActivityItem, type DashboardStats, type RiskLevel } from "@/lib/types";
 
 const ACTIVITY_ICON = { single: Search, bulk: ListTree, flaky: Activity } as const;
 const ACTIVITY_LABEL = { single: "Single Test", bulk: "Bulk Log", flaky: "Flaky Test" } as const;
@@ -46,7 +46,15 @@ function RiskBreakdown({ counts }: { counts: Record<RiskLevel, number> }) {
   );
 }
 
-export function DashboardView({ stats, onClearAll }: { stats: DashboardStats; onClearAll: () => void }) {
+export function DashboardView({
+  stats,
+  onClearAll,
+  onSelectActivity,
+}: {
+  stats: DashboardStats;
+  onClearAll: () => void;
+  onSelectActivity: (item: DashboardActivityItem) => void;
+}) {
   const totalDiagnoses = stats.totalSingleDiagnoses + stats.totalBulkClustersDiagnosed + stats.totalFlakyAnalyses;
 
   if (stats.recentActivity.length === 0) {
@@ -104,23 +112,29 @@ export function DashboardView({ stats, onClearAll }: { stats: DashboardStats; on
             {stats.recentActivity.map((item) => {
               const Icon = ACTIVITY_ICON[item.kind];
               return (
-                <li key={item.id} className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-medium">{item.summary}</p>
-                      {item.risk && (
-                        <Badge variant="secondary" className={`shrink-0 text-xs ${riskClassName(item.risk)}`}>
-                          {item.confidence}%
-                        </Badge>
-                      )}
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectActivity(item)}
+                    className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left text-sm transition-colors hover:bg-accent hover:cursor-pointer"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate font-medium">{item.summary}</p>
+                        {item.risk && (
+                          <Badge variant="secondary" className={`shrink-0 text-xs ${riskClassName(item.risk)}`}>
+                            {item.confidence}%
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {ACTIVITY_LABEL[item.kind]} · {new Date(item.timestamp).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {ACTIVITY_LABEL[item.kind]} · {new Date(item.timestamp).toLocaleString()}
-                    </p>
-                  </div>
+                  </button>
                 </li>
               );
             })}
