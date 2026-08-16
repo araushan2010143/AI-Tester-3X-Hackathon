@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { diagnoseCluster, GeminiOverloadedError } from "@/lib/gemini";
-import { parseFailures, MAX_LOG_CHARS } from "@/lib/log-parser";
+import { parseFailures, detectCiProvider, MAX_LOG_CHARS } from "@/lib/log-parser";
 import { clusterFailures } from "@/lib/failure-clustering";
+import { detectSharedIdentifiers } from "@/lib/shared-data-detector";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import type { BulkStreamEvent, DiagnosisResult, FailureCluster, Framework } from "@/lib/types";
 
-const VALID_FRAMEWORKS: Framework[] = ["playwright-ts", "selenium-java"];
+const VALID_FRAMEWORKS: Framework[] = ["playwright-ts", "playwright-js", "selenium-java"];
 const MAX_CLUSTERS_TO_DIAGNOSE = 40;
 const CONCURRENCY = 3;
 
@@ -46,8 +47,10 @@ export async function POST(req: Request) {
   }
 
   const fw = framework as Framework;
+  const ciProvider = detectCiProvider(ciLog);
   const failures = parseFailures(ciLog, fw);
   const clusters = clusterFailures(failures);
+  const sharedIdentifiers = detectSharedIdentifiers(failures);
   const toDiagnose = clusters.slice(0, MAX_CLUSTERS_TO_DIAGNOSE);
   const overflow = clusters.slice(MAX_CLUSTERS_TO_DIAGNOSE);
 
@@ -67,7 +70,13 @@ export async function POST(req: Request) {
         }
       }
 
-      send({ type: "start", totalFailures: failures.length, totalClusters: clusters.length });
+      send({
+        type: "start",
+        totalFailures: failures.length,
+        totalClusters: clusters.length,
+        ciProvider: ciProvider === "unknown" ? undefined : ciProvider,
+        sharedIdentifiers: sharedIdentifiers.length > 0 ? sharedIdentifiers : undefined,
+      });
 
       let clustersOk = 0;
       let clustersFailed = 0;

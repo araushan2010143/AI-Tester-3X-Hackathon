@@ -2,8 +2,9 @@ import { Loader2 } from "lucide-react";
 import { Accordion } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ClusterRow } from "@/components/cluster-row";
+import { SharedDataWarning } from "@/components/shared-data-warning";
 import { FAILURE_TYPE_META } from "@/components/failure-meta";
-import { FAILURE_TYPE_LABELS, type FailureType } from "@/lib/types";
+import { FAILURE_TYPE_LABELS, type CiProvider, type FailureType, type SharedIdentifierGroup } from "@/lib/types";
 import type { ClusterRowState } from "@/lib/bulk-types";
 
 interface BulkResultsProps {
@@ -11,7 +12,14 @@ interface BulkResultsProps {
   totalClusters: number;
   rows: ClusterRowState[];
   streaming: boolean;
+  ciProvider?: CiProvider;
+  sharedIdentifiers?: SharedIdentifierGroup[];
 }
+
+const CI_PROVIDER_LABELS: Record<Exclude<CiProvider, "unknown">, string> = {
+  "github-actions": "GitHub Actions",
+  jenkins: "Jenkins",
+};
 
 function FailureTypeBreakdown({ rows }: { rows: ClusterRowState[] }) {
   const counts = new Map<FailureType, number>();
@@ -42,7 +50,14 @@ function FailureTypeBreakdown({ rows }: { rows: ClusterRowState[] }) {
   );
 }
 
-export function BulkResults({ totalFailures, totalClusters, rows, streaming }: BulkResultsProps) {
+export function BulkResults({
+  totalFailures,
+  totalClusters,
+  rows,
+  streaming,
+  ciProvider,
+  sharedIdentifiers,
+}: BulkResultsProps) {
   // Rows arrive in stream-completion order, not size order — sort a display copy so the
   // biggest (most impactful) root cause always surfaces first, and can be called out as primary.
   const sortedRows = [...rows].sort((a, b) => b.cluster.memberCount - a.cluster.memberCount);
@@ -54,7 +69,9 @@ export function BulkResults({ totalFailures, totalClusters, rows, streaming }: B
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Triage summary</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Triage summary{ciProvider && ciProvider !== "unknown" ? ` · Detected: ${CI_PROVIDER_LABELS[ciProvider]} log` : ""}
+            </p>
             <h2 className="text-lg font-semibold">
               {totalFailures} {totalFailures === 1 ? "failure" : "failures"} → {totalClusters}{" "}
               {totalClusters === 1 ? "root cause" : "root causes"}
@@ -74,7 +91,8 @@ export function BulkResults({ totalFailures, totalClusters, rows, streaming }: B
         </div>
         <FailureTypeBreakdown rows={rows} />
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {sharedIdentifiers && sharedIdentifiers.length > 0 && <SharedDataWarning groups={sharedIdentifiers} />}
         <Accordion className="gap-0">
           {sortedRows.map((row, i) => (
             <ClusterRow

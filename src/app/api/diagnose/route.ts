@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     return badRequest("Request body must be valid JSON.");
   }
 
-  const { testCode, ciLog, domSnippet, consoleLog, networkLog, screenshotDataUrl, framework } = body;
+  const { testCode, ciLog, domSnippet, consoleLog, networkLog, environmentInfo, screenshotDataUrl, framework } = body;
 
   if (!testCode || typeof testCode !== "string" || !testCode.trim()) {
     return badRequest("testCode is required.");
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
         domSnippet: typeof domSnippet === "string" ? domSnippet : undefined,
         consoleLog: typeof consoleLog === "string" ? consoleLog : undefined,
         networkLog: typeof networkLog === "string" ? networkLog : undefined,
+        environmentInfo: typeof environmentInfo === "string" ? environmentInfo : undefined,
         framework: framework as Framework,
       },
       typeof screenshotDataUrl === "string" ? screenshotDataUrl : undefined

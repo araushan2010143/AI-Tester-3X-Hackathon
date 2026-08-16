@@ -24,7 +24,7 @@ import { addBulkHistoryEntry } from "@/lib/bulk-history";
 import { DEMOS } from "@/lib/demo-data";
 import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
 import { DEMO_FLAKY_RUN } from "@/lib/demo-flaky-run";
-import { FRAMEWORK_LABELS, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type RunHistoryStats } from "@/lib/types";
+import { FRAMEWORK_LABELS, type CiProvider, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type RunHistoryStats, type SharedIdentifierGroup } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
 const MONACO_LANGUAGE: Record<Framework, string> = {
@@ -43,6 +43,7 @@ export default function Home() {
   const [domSnippet, setDomSnippet] = useState("");
   const [consoleLog, setConsoleLog] = useState("");
   const [networkLog, setNetworkLog] = useState("");
+  const [environmentInfo, setEnvironmentInfo] = useState("");
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,6 +65,7 @@ export default function Home() {
       domSnippet: domSnippet.trim() || undefined,
       consoleLog: consoleLog.trim() || undefined,
       networkLog: networkLog.trim() || undefined,
+      environmentInfo: environmentInfo.trim() || undefined,
       framework,
     };
 
@@ -96,6 +98,7 @@ export default function Home() {
     setDomSnippet(demo.request.domSnippet ?? "");
     setConsoleLog("");
     setNetworkLog("");
+    setEnvironmentInfo("");
     setScreenshotDataUrl(null);
     setResult(demo.result);
     toast.success("Demo example loaded — no API key needed to view this result.");
@@ -112,6 +115,7 @@ export default function Home() {
       setDomSnippet("");
       setConsoleLog("");
       setNetworkLog("");
+      setEnvironmentInfo("");
       setScreenshotDataUrl(null);
       setResult(null);
       toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
@@ -126,6 +130,7 @@ export default function Home() {
     setDomSnippet(entry.request.domSnippet ?? "");
     setConsoleLog(entry.request.consoleLog ?? "");
     setNetworkLog(entry.request.networkLog ?? "");
+    setEnvironmentInfo(entry.request.environmentInfo ?? "");
     setScreenshotDataUrl(null);
     setResult(entry.result);
   }
@@ -137,6 +142,7 @@ export default function Home() {
     setDomSnippet("");
     setConsoleLog("");
     setNetworkLog("");
+    setEnvironmentInfo("");
     setScreenshotDataUrl(null);
   }
 
@@ -148,6 +154,8 @@ export default function Home() {
   const [bulkTotalFailures, setBulkTotalFailures] = useState(0);
   const [bulkTotalClusters, setBulkTotalClusters] = useState(0);
   const [bulkRows, setBulkRows] = useState<ClusterRowState[]>([]);
+  const [bulkCiProvider, setBulkCiProvider] = useState<CiProvider | undefined>(undefined);
+  const [bulkSharedIdentifiers, setBulkSharedIdentifiers] = useState<SharedIdentifierGroup[] | undefined>(undefined);
 
   const canAnalyzeLog = bulkLog.trim().length > 0 && !bulkStreaming;
 
@@ -157,6 +165,8 @@ export default function Home() {
     setBulkTotalFailures(entry.totalFailures);
     setBulkTotalClusters(entry.totalClusters);
     setBulkRows(entry.rows);
+    setBulkCiProvider(undefined);
+    setBulkSharedIdentifiers(undefined);
     setBulkStarted(true);
     setBulkStreaming(false);
   }
@@ -178,6 +188,8 @@ export default function Home() {
     setBulkRows([]);
     setBulkTotalFailures(0);
     setBulkTotalClusters(0);
+    setBulkCiProvider(undefined);
+    setBulkSharedIdentifiers(undefined);
 
     // Mirrors the React state locally so the final `done` event can save a complete
     // history entry without racing the async setState batching.
@@ -219,6 +231,8 @@ export default function Home() {
             collectedTotalClusters = event.totalClusters;
             setBulkTotalFailures(event.totalFailures);
             setBulkTotalClusters(event.totalClusters);
+            setBulkCiProvider(event.ciProvider);
+            setBulkSharedIdentifiers(event.sharedIdentifiers);
             if (event.totalFailures === 0) {
               toast.error("No failures matched this framework's log format. Check the log or try the other framework.");
             }
@@ -442,6 +456,16 @@ export default function Home() {
                     </div>
 
                     <div className="space-y-2">
+                      <label className="text-sm font-semibold">Environment / Version Info</label>
+                      <Textarea
+                        value={environmentInfo}
+                        onChange={(e) => setEnvironmentInfo(e.target.value)}
+                        placeholder={"Local: Node 22, Playwright 1.55, Chrome 140\nCI: Node 20, Playwright 1.48, ChromeDriver 139"}
+                        className="min-h-16 font-mono text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
                       <label className="text-sm font-semibold">Screenshot at Failure</label>
                       <p className="text-xs text-muted-foreground">
                         Sent to Gemini as an image — a cookie banner, modal, or error page it wouldn&apos;t
@@ -540,6 +564,8 @@ export default function Home() {
                 totalClusters={bulkTotalClusters}
                 rows={bulkRows}
                 streaming={bulkStreaming}
+                ciProvider={bulkCiProvider}
+                sharedIdentifiers={bulkSharedIdentifiers}
               />
             )}
 

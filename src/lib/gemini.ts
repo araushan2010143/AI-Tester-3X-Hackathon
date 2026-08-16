@@ -80,13 +80,14 @@ ${CATEGORY_GUIDANCE}
 - The fix must be idiomatic, resilient, production-ready code in the same framework/language as the test (prefer accessible/semantic locators over brittle CSS/XPath for UI frameworks, proper explicit waits over sleeps, etc.).
 - "before" should be the specific broken snippet from the test code, not the whole file.
 ${hasScreenshot ? "- A screenshot of the page at the moment of failure is attached as an image. Actually look at it — a cookie/consent banner, a modal, a loading spinner, an error page, an unexpected redirect, or misaligned layout can explain a failure that the text alone doesn't. If it shows something relevant, cite it specifically as evidence (e.g. \"screenshot shows a cookie-consent overlay covering the button\"); if it doesn't add anything beyond the text evidence, don't force it in." : ""}
+${req.environmentInfo ? "- Environment/version info is provided below. If it states both a local/expected value and a CI/actual value for the same thing (Node, browser, driver, framework version), compare them explicitly — a mismatch there (e.g. Chrome 140 vs ChromeDriver 139) is strong, specific evidence, and usually means dependency_issue or browser_issue is the sharper category than a generic one." : ""}
 
 --- FAILED TEST CODE (${FRAMEWORK_LABELS[req.framework]}) ---
 ${req.testCode}
 
 --- CI/CD ERROR LOG / STACK TRACE ---
 ${req.ciLog}
-${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : ""}${req.consoleLog ? `\n--- BROWSER CONSOLE LOG ---\n${req.consoleLog}\n` : ""}${req.networkLog ? `\n--- NETWORK LOG / FAILED REQUESTS ---\n${req.networkLog}\n` : ""}
+${req.domSnippet ? `\n--- RELEVANT DOM/HTML SNIPPET ---\n${req.domSnippet}\n` : ""}${req.consoleLog ? `\n--- BROWSER CONSOLE LOG ---\n${req.consoleLog}\n` : ""}${req.networkLog ? `\n--- NETWORK LOG / FAILED REQUESTS ---\n${req.networkLog}\n` : ""}${req.environmentInfo ? `\n--- ENVIRONMENT / VERSION INFO ---\n${req.environmentInfo}\n` : ""}
 Respond with only the JSON object matching the required schema.`;
 }
 

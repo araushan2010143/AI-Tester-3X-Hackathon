@@ -65,6 +65,7 @@ export interface DiagnoseRequest {
   domSnippet?: string;
   consoleLog?: string;
   networkLog?: string;
+  environmentInfo?: string;
   framework: Framework;
 }
 
@@ -91,8 +92,25 @@ export interface FailureCluster {
   representative: ParsedFailure;
 }
 
+/** Which CI system's log format was detected, purely for an honest "here's what we saw" label. */
+export type CiProvider = "github-actions" | "jenkins" | "unknown";
+
+/** A concrete identifier (id/email/UUID) that shows up in 2+ *different* tests' failures —
+ *  computed evidence for a possible shared-test-data / parallel-execution collision. */
+export interface SharedIdentifierGroup {
+  identifier: string;
+  kind: "id" | "email" | "uuid";
+  testNames: string[];
+}
+
 export type BulkStreamEvent =
-  | { type: "start"; totalFailures: number; totalClusters: number }
+  | {
+      type: "start";
+      totalFailures: number;
+      totalClusters: number;
+      ciProvider?: CiProvider;
+      sharedIdentifiers?: SharedIdentifierGroup[];
+    }
   | { type: "cluster"; cluster: FailureCluster; diagnosis: DiagnosisResult }
   | { type: "cluster-error"; cluster: FailureCluster; error: string }
   | { type: "skipped-cluster"; cluster: FailureCluster }

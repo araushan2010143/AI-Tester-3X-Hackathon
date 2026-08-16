@@ -1,6 +1,36 @@
-import type { Framework, ParsedFailure } from "./types";
+import type { CiProvider, Framework, ParsedFailure } from "./types";
 
 export const MAX_LOG_CHARS = 2_000_000;
+
+/**
+ * A real downloaded GitHub Actions or Jenkins (Timestamper) log prefixes every single line
+ * with a timestamp, which breaks the `^`-anchored PLAYWRIGHT_HEADER/exception-anchor regexes
+ * below — the good Playwright/Selenium output is in there, it's just wrapped in CI noise.
+ */
+export function detectCiProvider(log: string): CiProvider {
+  if (/##\[(group|endgroup|error|warning|section)\]/.test(log) || /::(error|warning|group|endgroup)::/.test(log)) {
+    return "github-actions";
+  }
+  if (/\[Pipeline\]\s*[{}]/.test(log) || /Finished:\s*(SUCCESS|FAILURE|UNSTABLE|ABORTED)/.test(log)) {
+    return "jenkins";
+  }
+  return "unknown";
+}
+
+function stripCiNoise(log: string): string {
+  const provider = detectCiProvider(log);
+  if (provider === "github-actions") {
+    return log
+      .replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s?/gm, "")
+      .split("\n")
+      .filter((line) => !/^##\[(group|endgroup)\]/.test(line))
+      .join("\n");
+  }
+  if (provider === "jenkins") {
+    return log.replace(/^\[\d{4}-\d{2}-\d{2}T[\d:.]+Z\]\s?/gm, "");
+  }
+  return log;
+}
 
 /** Matches Playwright's list-reporter failure header, e.g. `  1) tests/dashboard.spec.ts:12:38 › opens the debug info panel` */
 const PLAYWRIGHT_HEADER = /^\s*(\d+)\)\s+(\S+):(\d+):(\d+)\s+›\s+(.+?)\s*=*\s*$/gm;
@@ -99,8 +129,9 @@ function parseGeneric(log: string): ParsedFailure[] {
 }
 
 export function parseFailures(log: string, framework: Framework): ParsedFailure[] {
+  const cleaned = stripCiNoise(log);
   // Playwright's list-reporter output is identical whether the test file is TS or JS.
-  const primary = framework === "selenium-java" ? parseSelenium(log) : parsePlaywright(log);
+  const primary = framework === "selenium-java" ? parseSelenium(cleaned) : parsePlaywright(cleaned);
   if (primary.length > 0) return primary;
-  return parseGeneric(log);
+  return parseGeneric(cleaned);
 }
