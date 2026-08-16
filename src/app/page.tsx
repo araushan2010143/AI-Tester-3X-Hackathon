@@ -27,8 +27,8 @@ import { addFlakyHistoryEntry, getFlakyHistory, clearFlakyHistory } from "@/lib/
 import { computeDashboardStats } from "@/lib/dashboard-stats";
 import { findSimilarDiagnoses } from "@/lib/similar-diagnoses";
 import { DEMOS } from "@/lib/demo-data";
-import { DEMO_BULK_LOG } from "@/lib/demo-bulk-log";
-import { DEMO_FLAKY_RUN } from "@/lib/demo-flaky-run";
+import { DEMO_BULK_LOGS } from "@/lib/demo-bulk-log";
+import { DEMO_FLAKY_RUNS } from "@/lib/demo-flaky-run";
 import { FRAMEWORK_LABELS, type CiProvider, type DashboardActivityItem, type DashboardStats, type DiagnoseRequest, type DiagnosisResult, type Framework, type HistoryEntry, type BulkStreamEvent, type FlakyHistoryEntry, type PrInfo, type RunHistoryStats, type SharedIdentifierGroup, type SimilarDiagnosis } from "@/lib/types";
 import type { BulkHistoryEntry, ClusterRowState } from "@/lib/bulk-types";
 
@@ -198,9 +198,25 @@ export default function Home() {
   }
 
   function handleLoadBulkDemo() {
-    setBulkFramework("playwright-ts");
-    setBulkLog(DEMO_BULK_LOG);
+    setBulkLog(DEMO_BULK_LOGS[bulkFramework]);
     toast.success("Demo log loaded — hit Analyze Log to run the real clustering + diagnosis pipeline.");
+  }
+
+  function handleBulkFrameworkChange(next: Framework) {
+    if (next === bulkFramework) return;
+
+    const hasContent = bulkLog.trim() || bulkStarted;
+    setBulkFramework(next);
+    if (hasContent) {
+      setBulkLog("");
+      setBulkStarted(false);
+      setBulkRows([]);
+      setBulkTotalFailures(0);
+      setBulkTotalClusters(0);
+      setBulkCiProvider(undefined);
+      setBulkSharedIdentifiers(undefined);
+      toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous log so results don't get mixed up.`);
+    }
   }
 
   async function handleAnalyzeLog() {
@@ -308,14 +324,31 @@ export default function Home() {
   const canAnalyzeFlaky = runHistoryText.trim().length > 0 && !flakyLoading;
 
   function handleLoadFlakyDemo() {
-    setFlakyFramework(DEMO_FLAKY_RUN.framework);
-    setTestName(DEMO_FLAKY_RUN.testName);
-    setRunHistoryText(DEMO_FLAKY_RUN.runHistoryText);
-    setFlakyTestCode(DEMO_FLAKY_RUN.testCode);
-    setFlakyFailureLog(DEMO_FLAKY_RUN.failureLog);
+    const demo = DEMO_FLAKY_RUNS[flakyFramework];
+    setTestName(demo.testName);
+    setRunHistoryText(demo.runHistoryText);
+    setFlakyTestCode(demo.testCode);
+    setFlakyFailureLog(demo.failureLog);
     setFlakyStats(null);
     setFlakyResult(null);
     toast.success("Demo run history loaded — hit Analyze Flakiness to run the real diagnosis.");
+  }
+
+  function handleFlakyFrameworkChange(next: Framework) {
+    if (next === flakyFramework) return;
+
+    const hasContent =
+      testName.trim() || runHistoryText.trim() || flakyTestCode.trim() || flakyFailureLog.trim() || flakyStats || flakyResult;
+    setFlakyFramework(next);
+    if (hasContent) {
+      setTestName("");
+      setRunHistoryText("");
+      setFlakyTestCode("");
+      setFlakyFailureLog("");
+      setFlakyStats(null);
+      setFlakyResult(null);
+      toast.info(`Switched to ${FRAMEWORK_LABELS[next]} — cleared the previous example so code doesn't get mixed up.`);
+    }
   }
 
   function handleSelectFlakyHistory(entry: FlakyHistoryEntry) {
@@ -620,7 +653,7 @@ export default function Home() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium">Test Framework</label>
-                <FrameworkSelector value={bulkFramework} onChange={setBulkFramework} />
+                <FrameworkSelector value={bulkFramework} onChange={handleBulkFrameworkChange} />
               </div>
 
               <div className="space-y-2">
@@ -691,7 +724,7 @@ export default function Home() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium">Test Framework</label>
-                <FrameworkSelector value={flakyFramework} onChange={setFlakyFramework} />
+                <FrameworkSelector value={flakyFramework} onChange={handleFlakyFrameworkChange} />
               </div>
 
               <div className="space-y-2">

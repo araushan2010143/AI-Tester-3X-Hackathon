@@ -1,10 +1,16 @@
+import type { Framework } from "./types";
+
 /**
  * Synthetic Jenkins/Playwright console log: 10 failures that should cluster
  * into ~4 distinct root causes (5 + 3 + 1 + 1) for the "Load Demo Log" button
  * in Bulk mode — proof that clustering collapses noisy real-world failure
  * counts into the handful of patterns actually causing them.
+ *
+ * Playwright's list-reporter output is identical whether the test file is
+ * TS or JS, so this one log covers both playwright-ts and playwright-js —
+ * see log-parser.ts's parseFailures, which only branches on Selenium vs not.
  */
-export const DEMO_BULK_LOG = `Running 500 tests using 8 workers
+export const DEMO_BULK_LOG_PLAYWRIGHT = `Running 500 tests using 8 workers
 
   1) tests/checkout/checkout-flow.spec.ts:45:10 › checkout flow › opens the debug info panel ===============================
 
@@ -121,3 +127,68 @@ export const DEMO_BULK_LOG = `Running 500 tests using 8 workers
 
   150 failed
   350 passed (14.2m)`;
+
+/**
+ * Selenium/Java equivalent of the log above — same clustering shape (5 + 3 + 1 + 1 →
+ * 4 root causes), authored and verified against the real parseFailures/clusterFailures
+ * pipeline (log-parser.ts, failure-clustering.ts) rather than assumed: parseSelenium's
+ * heuristic window-scanning stops at the first blank line after its anchor, so each
+ * `at Class.method(...)` frame has to sit directly under its exception with no blank
+ * line between them, or the test name never makes it into the snippet.
+ */
+export const DEMO_BULK_LOG_SELENIUM = `org.openqa.selenium.NoSuchElementException: no such element: Unable to locate element:
+{"method":"xpath","selector":"//div[@class='header']/button[3]"}
+  (Session info: chrome=124.0.6367.91)
+Build info: version: '4.19.1', revision: 'a72a655060'
+	at CheckoutPageTest.opensDebugInfoPanel(CheckoutPageTest.java:45)
+
+org.openqa.selenium.NoSuchElementException: no such element: Unable to locate element:
+{"method":"xpath","selector":"//div[@class='header']/button[3]"}
+  (Session info: chrome=125.0.6422.60)
+Build info: version: '4.19.1', revision: 'a72a655060'
+	at DashboardPageTest.opensDebugInfoPanel(DashboardPageTest.java:88)
+
+org.openqa.selenium.NoSuchElementException: no such element: Unable to locate element:
+{"method":"xpath","selector":"//div[@class='header']/button[3]"}
+  (Session info: chrome=124.0.6367.91)
+Build info: version: '4.19.1', revision: 'a72a655060'
+	at SettingsPageTest.opensDebugInfoPanel(SettingsPageTest.java:22)
+
+org.openqa.selenium.NoSuchElementException: no such element: Unable to locate element:
+{"method":"xpath","selector":"//div[@class='header']/button[3]"}
+  (Session info: chrome=126.0.6478.61)
+Build info: version: '4.19.1', revision: 'a72a655060'
+	at ReportsPageTest.opensDebugInfoPanel(ReportsPageTest.java:61)
+
+org.openqa.selenium.NoSuchElementException: no such element: Unable to locate element:
+{"method":"xpath","selector":"//div[@class='header']/button[3]"}
+  (Session info: chrome=124.0.6367.91)
+Build info: version: '4.19.1', revision: 'a72a655060'
+	at BillingPageTest.opensDebugInfoPanel(BillingPageTest.java:33)
+
+org.openqa.selenium.ElementClickInterceptedException: element click intercepted: Element <button class="save-button">...</button> is not clickable at point (450, 620). Other element would receive the click: <div class="modal-backdrop fixed inset-0 z-40"></div>
+  (Session info: chrome=124.0.6367.91)
+	at CheckoutPageTest.savesPaymentDetails(CheckoutPageTest.java:71)
+
+org.openqa.selenium.ElementClickInterceptedException: element click intercepted: Element <button class="save-button">...</button> is not clickable at point (450, 620). Other element would receive the click: <div class="modal-backdrop fixed inset-0 z-40"></div>
+  (Session info: chrome=125.0.6422.60)
+	at ProfilePageTest.savesChanges(ProfilePageTest.java:19)
+
+org.openqa.selenium.ElementClickInterceptedException: element click intercepted: Element <button class="save-button">...</button> is not clickable at point (450, 620). Other element would receive the click: <div class="modal-backdrop fixed inset-0 z-40"></div>
+  (Session info: chrome=124.0.6367.91)
+	at TeamPageTest.savesInviteSettings(TeamPageTest.java:54)
+
+java.lang.AssertionError: expected [Order Confirmed] but found [Order Pending]
+	at OrderConfirmationTest.showsConfirmedStatus(OrderConfirmationTest.java:40)
+
+org.openqa.selenium.WebDriverException: java.net.ConnectException: Connection refused: connect to internal-api.staging.example.com:8443
+	at InventoryPageTest.loadsCurrentStockLevels(InventoryPageTest.java:15)
+
+Tests run: 10, Failures: 10, Errors: 0, Skipped: 0
+BUILD FAILURE`;
+
+export const DEMO_BULK_LOGS: Record<Framework, string> = {
+  "playwright-ts": DEMO_BULK_LOG_PLAYWRIGHT,
+  "playwright-js": DEMO_BULK_LOG_PLAYWRIGHT,
+  "selenium-java": DEMO_BULK_LOG_SELENIUM,
+};
