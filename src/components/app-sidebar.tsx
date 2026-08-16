@@ -25,7 +25,7 @@ export function AppSidebar({ mode, onModeChange }: { mode: AppMode; onModeChange
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="flex items-center gap-3 px-5 py-5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-lg">
           🩺
         </span>
         <div className="min-w-0">
