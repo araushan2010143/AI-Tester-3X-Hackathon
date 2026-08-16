@@ -28,10 +28,11 @@ The core discipline throughout: **compute what can be computed locally, and only
 ## ✨ Features
 
 **Diagnosis**
-- 12-category failure taxonomy (locator breakage, timing/race condition, assertion failure, network/API failure, environment, configuration, authentication, test data, dependency, browser, flaky, application bug) + a `risk` field, enforced by a Gemini `responseSchema` — every diagnosis is structurally guaranteed to have a category, confidence, evidence, and a fix
-- Multi-modal evidence: test code, CI log, DOM snippet, browser console log, network log, environment/version info, a screenshot (real Gemini vision call), and a GitHub PR diff — all optional, all shown back to you in a "Signals Analyzed" checklist so you know exactly what the AI actually had
+- 12-category failure taxonomy (locator breakage, timing/race condition, assertion failure, network/API failure, environment, configuration, authentication, test data, dependency, browser, flaky, application bug) + a `risk` field, enforced by a JSON schema — every diagnosis is structurally guaranteed to have a category, confidence, evidence, and a fix
+- Multi-modal evidence: test code, CI log, DOM snippet, browser console log, network log, environment/version info, a screenshot (real vision call), and a GitHub PR diff — all optional, all shown back to you in a "Signals Analyzed" checklist so you know exactly what the AI actually had
 - Before/after code fix with a plain-English explanation and one-click copy — deliberately no "Apply Patch"; the AI never touches your code directly
 - "You've seen this before" — new diagnoses are checked against your own past history for shared keywords
+- **Automatic AI provider failover**: Gemini is primary; if it's overloaded, rate-limited, or returns a malformed response, the request automatically retries against OpenAI, then Groq, before giving up — a demo shouldn't die because one provider is having a bad day. Whichever provider actually answered is shown in the UI ("via Gemini" / "via OpenAI" / "via Groq"), not hidden
 
 **CI Failures (bulk triage)**
 - Local parsing + fingerprint-based clustering (error type + normalized message, stack-frame noise stripped) before anything reaches the AI — one diagnosis per cluster, not per failing test
@@ -73,7 +74,7 @@ The core discipline throughout: **compute what can be computed locally, and only
 - **Styling/UI:** Tailwind CSS v4 (CSS-first `@theme`) + shadcn/ui on `@base-ui/react` primitives
 - **Code editing:** Monaco Editor (`@monaco-editor/react`), custom theme matched to the app's palette
 - **Theming:** `next-themes` — dark (default) and light, both hand-designed to the same brand accent
-- **AI:** Google Gemini API (`@google/generative-ai`), JSON-mode structured output via `responseSchema`, multimodal (image) input for screenshots
+- **AI:** Google Gemini (primary) with automatic failover to OpenAI, then Groq (`openai` SDK — Groq's API is OpenAI-compatible, one dependency serves both). Structured JSON output (schema-enforced on Gemini/OpenAI, validated at runtime as a backstop on Groq) and multimodal (image) input for screenshots on the two vision-capable providers
 - **External integration:** GitHub REST API (read-only PR diff correlation) via a fine-grained PAT
 - **History:** `localStorage` (no database — everything ships client-side for the MVP)
 - **Deployment target:** Vercel
@@ -102,9 +103,10 @@ npm install
 cp .env.example .env.local
 ```
 Then edit `.env.local`:
-- `GEMINI_API_KEY` — **required** for any real diagnosis (Single Test / CI Failures / Flaky Tests all call Gemini)
+- `GEMINI_API_KEY` — **required** for any real diagnosis (Single Test / CI Failures / Flaky Tests all call an AI provider, Gemini first)
 - `GEMINI_MODEL` — optional, defaults to `gemini-flash-latest`
 - `GITHUB_TOKEN` — optional, only needed to enable the "GitHub PR" evidence field in Single Test mode. Create a fine-grained token scoped to just the repo(s) you want readable, with **Pull requests: Read-only** — no write access needed.
+- `OPENAI_API_KEY` / `OPENAI_MODEL` and `GROQ_API_KEY` / `GROQ_MODEL` — both optional. If set, they're used as automatic fallback when Gemini is unavailable — see [`.env.example`](.env.example) for details. Leave both blank to run Gemini-only, identical to before this existed.
 
 ### 4. Run the dev server
 ```bash
@@ -118,10 +120,11 @@ No API key yet? On the **Investigate** tab, click **Load Demo** — it renders a
 
 ## 📋 How it works
 
-1. **Investigate**: paste a failed test's code and its CI log (DOM/console/network/environment/screenshot/PR are optional extras). `POST /api/diagnose` builds a prompt grounded in your actual selector/error/DOM text, calls Gemini with a `responseSchema`, and renders the result — root cause, evidence, confidence, before/after fix.
-2. **CI Failures**: paste a whole console log. It's parsed and fingerprint-clustered locally first (`log-parser.ts` + `failure-clustering.ts`); `POST /api/diagnose-bulk` streams one Gemini diagnosis per cluster (bounded concurrency via `lib/concurrency.ts`), not per failing test.
-3. **Flaky Tests**: paste run history or a CI log with retries; `run-history.ts`/`retry-parser.ts` compute the real failure rate and pattern locally, and `POST /api/diagnose-flaky` asks Gemini to explain *that* computed pattern.
+1. **Investigate**: paste a failed test's code and its CI log (DOM/console/network/environment/screenshot/PR are optional extras). `POST /api/diagnose` builds a prompt grounded in your actual selector/error/DOM text and calls `diagnoseFailure()`, which renders the result — root cause, evidence, confidence, before/after fix.
+2. **CI Failures**: paste a whole console log. It's parsed and fingerprint-clustered locally first (`log-parser.ts` + `failure-clustering.ts`); `POST /api/diagnose-bulk` streams one diagnosis per cluster (bounded concurrency via `lib/concurrency.ts`), not per failing test.
+3. **Flaky Tests**: paste run history or a CI log with retries; `run-history.ts`/`retry-parser.ts` compute the real failure rate and pattern locally, and `POST /api/diagnose-flaky` asks the AI to explain *that* computed pattern.
 4. Every completed run in every mode is saved to its own local history store and rolls up into **Overview**.
+5. All three routes above go through one shared prompt-building layer (`lib/diagnose.ts`), which hands off to `lib/llm-router.ts` — that's the piece that tries Gemini, then OpenAI, then Groq, and returns whichever one actually answered.
 
 ## 📁 Project structure
 ```
@@ -131,7 +134,10 @@ src/app/api/diagnose/route.ts         single-test diagnosis (+ GitHub PR correla
 src/app/api/diagnose-bulk/route.ts    bulk log: parse -> cluster -> stream diagnoses
 src/app/api/diagnose-flaky/route.ts   flaky test: compute stats -> AI explains
 
-src/lib/gemini.ts                     prompt builders + Gemini client + response schema
+src/lib/diagnose.ts                   prompt builders; the 3 public diagnose*() entry points
+src/lib/llm-router.ts                 tries Gemini -> OpenAI -> Groq, returns whichever answered
+src/lib/gemini-provider.ts / openai-provider.ts / groq-provider.ts   one AI provider adapter each
+src/lib/validate-diagnosis.ts         runtime shape-check (the real safety net on Groq's looser JSON mode)
 src/lib/types.ts                      DiagnosisResult / FailureType / DashboardStats contracts
 src/lib/log-parser.ts                 CI-provider detection, Playwright/Selenium log parsing
 src/lib/failure-clustering.ts         error-signature fingerprinting + clustering
