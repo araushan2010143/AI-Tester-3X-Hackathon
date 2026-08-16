@@ -30,7 +30,7 @@ export function FailureCategoryTable({ counts, activeType, onSelect }: FailureCa
             onClick={() => onSelect(active ? null : type)}
             className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
               i > 0 ? "border-t border-border" : ""
-            } ${active ? "bg-accent" : "hover:bg-accent/50"}`}
+            } ${active ? "bg-accent" : "hover:bg-accent/70"}`}
           >
             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${meta.className}`}>
               <Icon className="h-3.5 w-3.5" />

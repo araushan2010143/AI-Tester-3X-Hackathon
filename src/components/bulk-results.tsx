@@ -119,7 +119,7 @@ export function BulkResults({
                     key={row.cluster.fingerprint}
                     type="button"
                     onClick={() => scrollToRow(`cluster-${i}`)}
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/50 ${
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/70 ${
                       i > 0 ? "border-t border-border" : ""
                     }`}
                   >
